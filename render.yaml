@@ -6,8 +6,8 @@ services:
     repo: https://github.com/King-Eliah/mentorship-platform
     branch: main
     rootDir: backend
-    buildCommand: npm install && npx prisma generate && npm run build
-    startCommand: npx prisma migrate deploy && npm start
+    buildCommand: chmod +x build.sh && ./build.sh
+    startCommand: chmod +x start.sh && ./start.sh
     healthCheckPath: /health
     autoDeploy: true
     envVars:
