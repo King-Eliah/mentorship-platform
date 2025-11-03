@@ -29,6 +29,7 @@ import searchRoutes from './routes/searchRoutes';
 import contactRoutes from './routes/contactRoutes';
 import conversationRoutes from './routes/conversationRoutes';
 import directMessageRoutes from './routes/directMessageRoutes';
+import seedRoutes from './routes/seedRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -92,6 +93,7 @@ app.use('/api/search', searchRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/direct-messages', directMessageRoutes);
+app.use('/api/seed', seedRoutes);
 
 // Error handling middleware (must be last)
 app.use(notFound);
