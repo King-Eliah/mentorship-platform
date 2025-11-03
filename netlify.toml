@@ -2,11 +2,12 @@
 
 [build]
   # Build command for the frontend
-  command = "cd frontend && npm install && npm run build"
+  command = "npm install && npm run build"
   # Output directory
-  publish = "frontend/dist"
+  publish = "dist"
   # Functions directory for serverless backend
-  functions = "netlify/functions"
+  functions = "../netlify/functions"
+  base = "frontend"
 
 [build.environment]
   NODE_VERSION = "18"
