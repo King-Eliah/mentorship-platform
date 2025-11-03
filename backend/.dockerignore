@@ -1,0 +1,10 @@
+# Ignore everything
+*
+
+# But not these files
+!dist/**
+!package.json
+!package-lock.json
+!prisma/**
+!node_modules/**
+!uploads/.gitkeep

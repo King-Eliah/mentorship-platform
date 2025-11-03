@@ -1,0 +1,200 @@
+import { Response } from 'express';
+import { AuthRequest } from '../types';
+import prisma from '../config/database';
+
+// Create activity
+export const createActivity = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { title, description, type, status, url, dueDate } = req.body;
+
+    const activity = await prisma.activity.create({
+      data: {
+        userId: req.user!.id,
+        title,
+        description,
+        type,
+        status: status || 'NOT_STARTED',
+        url,
+        dueDate: dueDate ? new Date(dueDate) : null,
+      },
+    });
+
+    res.status(201).json({ activity });
+  } catch (error) {
+    console.error('Error creating activity:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get activities for current user
+export const getUserActivities = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { type, status } = req.query;
+
+    const where: any = { userId: req.user!.id };
+    if (type) where.type = type;
+    if (status) where.status = status;
+
+    const activities = await prisma.activity.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ activities });
+  } catch (error) {
+    console.error('Error getting activities:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get single activity
+export const getActivity = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const activity = await prisma.activity.findUnique({
+      where: { id },
+    });
+
+    if (!activity) {
+      res.status(404).json({ message: 'Activity not found' });
+      return;
+    }
+
+    // Check if user owns this activity
+    if (activity.userId !== req.user!.id && req.user!.role !== 'ADMIN') {
+      res.status(403).json({ message: 'Not authorized' });
+      return;
+    }
+
+    res.json({ activity });
+  } catch (error) {
+    console.error('❌Error getting activity Error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Update activity
+export const updateActivity = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const activity = await prisma.activity.findUnique({ where: { id } });
+
+    if (!activity) {
+      res.status(404).json({ message: 'Activity not found' });
+      return;
+    }
+
+    if (activity.userId !== req.user!.id && req.user!.role !== 'ADMIN') {
+      res.status(403).json({ message: 'Not authorized' });
+      return;
+    }
+
+    const updateData: any = { ...req.body };
+    if (req.body.dueDate) updateData.dueDate = new Date(req.body.dueDate);
+    if (req.body.status === 'COMPLETED' && !activity.completedAt) {
+      updateData.completedAt = new Date();
+    }
+
+    const updated = await prisma.activity.update({
+      where: { id },
+      data: updateData,
+    });
+
+    res.json({ activity: updated });
+  } catch (error) {
+    console.error('❌ [UPDATE ACTIVITY] Error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Delete activity
+export const deleteActivity = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const activity = await prisma.activity.findUnique({ where: { id } });
+
+    if (!activity) {
+      res.status(404).json({ message: 'Activity not found' });
+      return;
+    }
+
+    if (activity.userId !== req.user!.id && req.user!.role !== 'ADMIN') {
+      res.status(403).json({ message: 'Not authorized' });
+      return;
+    }
+
+    await prisma.activity.delete({ where: { id } });
+
+    res.json({ message: 'Activity deleted successfully' });
+  } catch (error) {
+    console.error('❌ [DELETE ACTIVITY] Error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get activity statistics
+export const getActivityStats = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const [total, completed, inProgress, notStarted] = await Promise.all([
+      prisma.activity.count({ where: { userId: req.user!.id } }),
+      prisma.activity.count({ where: { userId: req.user!.id, status: 'COMPLETED' } }),
+      prisma.activity.count({ where: { userId: req.user!.id, status: 'IN_PROGRESS' } }),
+      prisma.activity.count({ where: { userId: req.user!.id, status: 'NOT_STARTED' } }),
+    ]);
+
+    res.json({
+      stats: {
+        total,
+        completed,
+        inProgress,
+        notStarted,
+      },
+    });
+  } catch (error) {
+    console.error('❌ [GET ACTIVITY STATS] Error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get activities for a specific user (admin only)
+export const getUserActivitiesById = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    // Only admins can view other users' activities
+    if (req.user!.role !== 'ADMIN') {
+      res.status(403).json({ message: 'Only admins can view user activities' });
+      return;
+    }
+
+    const { userId } = req.params;
+    const { type, status, limit = '20', offset = '0' } = req.query;
+
+    const where: any = { userId };
+    if (type) where.type = type;
+    if (status) where.status = status;
+
+    const [activities, total] = await Promise.all([
+      prisma.activity.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: parseInt(limit as string),
+        skip: parseInt(offset as string),
+      }),
+      prisma.activity.count({ where }),
+    ]);
+
+    res.json({
+      activities,
+      pagination: {
+        total,
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string),
+      },
+    });
+  } catch (error) {
+    console.error('❌ [GET USER ACTIVITIES BY ID] Error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
