@@ -5,8 +5,7 @@
   command = "npm install && npm run build"
   # Output directory
   publish = "dist"
-  # Functions directory for serverless backend
-  functions = "../netlify/functions"
+  # Base directory
   base = "frontend"
 
 [build.environment]
