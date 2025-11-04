@@ -240,8 +240,11 @@ export default function UsersManagement() {
   const handleDeleteConfirm = async () => {
     if (selectedUser) {
       try {
+        // Remove user from the list
         setUsers(users.filter(u => u.id !== selectedUser.id));
-        toast.success(`User ${selectedUser.firstName} ${selectedUser.lastName} has been deleted.`);
+        // Show success toast
+        toast.success(`User ${selectedUser.firstName} ${selectedUser.lastName} has been deleted successfully.`);
+        // Close modal and deselect
         setSelectedUser(null);
         setShowDeleteConfirm(false);
       } catch (error) {
