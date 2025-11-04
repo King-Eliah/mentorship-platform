@@ -237,11 +237,16 @@ export default function UsersManagement() {
     setShowDetailsModal(true);
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (selectedUser) {
-      setUsers(users.filter(u => u.id !== selectedUser.id));
-      toast.success(`User ${selectedUser.firstName} ${selectedUser.lastName} has been deleted.`);
-      setSelectedUser(null);
+      try {
+        setUsers(users.filter(u => u.id !== selectedUser.id));
+        toast.success(`User ${selectedUser.firstName} ${selectedUser.lastName} has been deleted.`);
+        setSelectedUser(null);
+      } catch (error) {
+        console.error('Failed to delete user:', error);
+        toast.error('Failed to delete user. Please try again.');
+      }
     }
   };
 
