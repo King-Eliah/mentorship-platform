@@ -10,7 +10,7 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
   try {
     const userId = req.user!.id;
     const { conversationId } = req.params;
-    const { content, replyToId } = req.body;
+    const { content } = req.body;
 
     // Validation
     if (!conversationId || !content || !content.trim()) {
@@ -49,7 +49,6 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
         senderId: userId,
         content: content.trim(),
         type: 'TEXT',
-        replyToId: replyToId || undefined,
       },
       include: {
         sender: {
@@ -58,18 +57,6 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
             firstName: true,
             lastName: true,
             avatar: true,
-          },
-        },
-        replyTo: {
-          select: {
-            id: true,
-            content: true,
-            sender: {
-              select: {
-                firstName: true,
-                lastName: true,
-              },
-            },
           },
         },
       },
@@ -102,8 +89,6 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
         type: message.type,
         isRead: message.isRead,
         createdAt: message.createdAt,
-        replyToId: message.replyToId,
-        replyTo: message.replyTo,
       },
     });
   } catch (error) {
@@ -147,18 +132,6 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
             firstName: true,
             lastName: true,
             avatar: true,
-          },
-        },
-        replyTo: {
-          select: {
-            id: true,
-            content: true,
-            sender: {
-              select: {
-                firstName: true,
-                lastName: true,
-              },
-            },
           },
         },
       },
