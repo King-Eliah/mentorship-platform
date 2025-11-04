@@ -8,6 +8,8 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  VITE_API_URL = "https://mentorship-platform-production-f0da.up.railway.app/api"
+  VITE_WS_URL = "wss://mentorship-platform-production-f0da.up.railway.app"
 
 # Redirects for SPA routing
 [[redirects]]
