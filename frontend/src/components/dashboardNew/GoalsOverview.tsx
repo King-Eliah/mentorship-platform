@@ -32,20 +32,50 @@ const GoalsOverview: React.FC<GoalsOverviewProps> = ({
   const [updatingGoalId, setUpdatingGoalId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const checkAndUpdateOverdueGoals = async (goals: Goal[]) => {
+    const now = new Date();
+    const updates: Promise<unknown>[] = [];
+
+    for (const goal of goals) {
+      if (goal.dueDate && goal.status !== GoalStatus.COMPLETED) {
+        const dueDate = new Date(goal.dueDate);
+        if (dueDate < now && goal.status !== GoalStatus.OVERDUE) {
+          // Auto-update to OVERDUE
+          updates.push(
+            goalService.updateGoal(goal.id, { status: GoalStatus.OVERDUE })
+              .catch(err => console.error('Failed to update overdue goal:', err))
+          );
+          goal.status = GoalStatus.OVERDUE; // Update locally immediately
+        }
+      }
+    }
+
+    if (updates.length > 0) {
+      await Promise.all(updates);
+    }
+
+    return goals;
+  };
+
   const loadGoals = async () => {
     if (!user?.id) return;
     
     try {
       setInternalLoading(true);
-      // Fetch recent goals (limit 3) sorted by most recently updated
+      // Fetch all active goals (excluding completed)
       const fetchedGoals = await goalService.getGoals(user.id, {
-        userId: user.id,
-        status: [GoalStatus.IN_PROGRESS, GoalStatus.NOT_STARTED, GoalStatus.OVERDUE]
+        userId: user.id
       });
       
-      // Sort by updatedAt and take top 3
-      const sortedGoals = fetchedGoals
-        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      // Filter out completed goals
+      const activeGoals = fetchedGoals.filter(goal => goal.status !== GoalStatus.COMPLETED);
+      
+      // Check and update overdue goals
+      const checkedGoals = await checkAndUpdateOverdueGoals(activeGoals);
+      
+      // Sort by createdAt (most recent first) and take top 3
+      const sortedGoals = checkedGoals
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 3);
       
       setInternalGoals(sortedGoals);
@@ -61,6 +91,7 @@ const GoalsOverview: React.FC<GoalsOverviewProps> = ({
     if (externalGoals.length === 0) {
       loadGoals();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, externalGoals.length, refreshKey]);
 
   // Refresh goals when component becomes visible (user navigates back to dashboard)
@@ -73,6 +104,17 @@ const GoalsOverview: React.FC<GoalsOverviewProps> = ({
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [externalGoals.length]);
+
+  // Auto-refresh goals every 30 seconds
+  useEffect(() => {
+    if (externalGoals.length === 0) {
+      const interval = setInterval(() => {
+        setRefreshKey(prev => prev + 1);
+      }, 30000); // 30 seconds
+
+      return () => clearInterval(interval);
+    }
   }, [externalGoals.length]);
 
   const displayGoals = externalGoals.length > 0 ? externalGoals : internalGoals;
@@ -127,13 +169,6 @@ const GoalsOverview: React.FC<GoalsOverviewProps> = ({
       default:
         return 'text-gray-500';
     }
-  };
-
-  const getProgressColor = (progress: number) => {
-    if (progress >= 75) return 'bg-green-500';
-    if (progress >= 50) return 'bg-blue-500';
-    if (progress >= 25) return 'bg-yellow-500';
-    return 'bg-gray-400';
   };
 
   const LoadingSkeleton = () => (
@@ -197,7 +232,6 @@ const GoalsOverview: React.FC<GoalsOverviewProps> = ({
           {displayGoals.map((goal) => {
             const StatusIcon = getStatusIcon(goal.status);
             const statusColor = getStatusColor(goal.status);
-            const progressColor = getProgressColor(goal.progress);
 
             return (
               <div
@@ -227,56 +261,37 @@ const GoalsOverview: React.FC<GoalsOverviewProps> = ({
                   </div>
                 </div>
 
-                {/* Progress Bar */}
-                <div className="mb-3">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>Progress</span>
-                    <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>{goal.progress}%</span>
-                  </div>
-                  <div className={`h-2 rounded-full overflow-hidden ${
-                    isDark ? 'bg-gray-700' : 'bg-gray-200'
-                  }`}>
-                    <div 
-                      className={`h-full ${progressColor} transition-all duration-300`}
-                      style={{ width: `${goal.progress}%` }}
-                    />
-                  </div>
-                </div>
-
                 {/* Status Change Dropdown */}
                 <div className="flex items-center justify-between">
                   <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                     Due: {new Date(goal.dueDate).toLocaleDateString()}
                   </div>
-                  <div className="w-36">
+                  <div className="w-40">
                     <DropdownSelect
                       placeholder="Status"
                       value={goal.status}
                       onChange={(value) => handleStatusChange(goal.id, value as GoalStatus)}
+                      className="py-1 text-sm"
                       options={[
                         { 
                           value: GoalStatus.NOT_STARTED, 
                           label: 'Not Started',
-                          icon: <Target className="w-4 h-4" />,
-                          description: 'Yet to begin'
+                          icon: <Target className="w-4 h-4" />
                         },
                         { 
                           value: GoalStatus.IN_PROGRESS, 
                           label: 'In Progress',
-                          icon: <Clock className="w-4 h-4" />,
-                          description: 'Currently working'
+                          icon: <Clock className="w-4 h-4" />
                         },
                         { 
                           value: GoalStatus.PAUSED, 
                           label: 'Paused',
-                          icon: <AlertCircle className="w-4 h-4" />,
-                          description: 'Temporarily on hold'
+                          icon: <AlertCircle className="w-4 h-4" />
                         },
                         { 
                           value: GoalStatus.COMPLETED, 
                           label: 'Completed',
-                          icon: <CheckCircle className="w-4 h-4" />,
-                          description: 'Successfully finished'
+                          icon: <CheckCircle className="w-4 h-4" />
                         }
                       ]}
                       disabled={updatingGoalId === goal.id}

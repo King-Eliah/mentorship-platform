@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
-import { X, Calendar, Clock, MapPin, FileText, Tag, AlertCircle, CheckCircle, Users, Presentation, UsersRound } from 'lucide-react';
+import { X, Calendar, Clock, MapPin, FileText, Tag, AlertCircle, CheckCircle, Users, Presentation, UsersRound, Link } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { DropdownSelect } from '../ui/DropdownSelect';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { FileUpload } from '../FileUpload';
-import { EventType, EventStatus } from '../../types';
+import { EventType } from '../../types';
 import toast from 'react-hot-toast';
 import { useEventOperations } from '../../hooks/useEvents';
 import { CreateEventRequest } from '../../services/eventService';
-import { useAuth } from '../../hooks/useAuth';
 
 interface CreateEventFormProps {
   onClose: () => void;
@@ -24,11 +23,11 @@ interface ValidationErrors {
   duration?: string;
   maxAttendees?: string;
   location?: string;
+  meetingLink?: string;
 }
 
 export const CreateEventForm: React.FC<CreateEventFormProps> = ({ onClose, onSuccess }) => {
   const { createEvent, loading: operationLoading } = useEventOperations();
-  const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [attachments, setAttachments] = useState<{name: string; url: string}[]>([]);
@@ -38,8 +37,9 @@ export const CreateEventForm: React.FC<CreateEventFormProps> = ({ onClose, onSuc
     scheduledAt: '',
     duration: 60,
     location: '',
+    meetingLink: '',
     maxAttendees: 10,
-    type: EventType.SESSION,
+    type: EventType.MENTORING_SESSION, // Updated to match backend enum
     tags: '',
     prerequisites: '',
     objectives: '',
@@ -96,6 +96,19 @@ export const CreateEventForm: React.FC<CreateEventFormProps> = ({ onClose, onSuc
       newErrors.location = 'Location must be less than 100 characters';
     }
 
+    // Validate meeting link if provided
+    if (formData.meetingLink && formData.meetingLink.trim()) {
+      const urlPattern = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
+      if (!urlPattern.test(formData.meetingLink.trim())) {
+        newErrors.meetingLink = 'Please enter a valid URL (e.g., https://meet.google.com/xxx)';
+      }
+    }
+
+    // If no location, meeting link should be provided
+    if (!formData.location && !formData.meetingLink.trim()) {
+      newErrors.meetingLink = 'Meeting link is required for virtual events';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -140,29 +153,38 @@ export const CreateEventForm: React.FC<CreateEventFormProps> = ({ onClose, onSuc
     }
 
     try {
+      // Calculate end time based on start time + duration
+      const startTime = new Date(formData.scheduledAt);
+      const endTime = new Date(startTime.getTime() + formData.duration * 60000);
+
       const eventToCreate: CreateEventRequest = {
         title: formData.title,
-        description: formData.description,
-        scheduledAt: new Date(formData.scheduledAt).toISOString(),
-        duration: formData.duration,
-        location: formData.location,
+        description: formData.description || 'No description provided', // Backend requires non-empty description
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        location: formData.location || undefined,
         maxAttendees: formData.maxAttendees,
         type: formData.type,
-        status: EventStatus.SCHEDULED,
-        organizerId: user?.id || '1',
+        isPublic: true, // All events are public by default
+        isVirtual: !formData.location, // Virtual if no location specified
+        meetingLink: formData.meetingLink.trim() || undefined, // Use provided link or undefined
+        attachments: attachments.length > 0 ? JSON.stringify(attachments) : undefined,
       };
+      
+      console.log('🚀 Creating event with data:', eventToCreate);
+      
       await createEvent.mutate(eventToCreate);
       toast.success('Event created successfully!');
       onSuccess();
     } catch (error) {
       toast.error('Failed to create event. Please try again.');
-      console.error(error);
+      console.error('❌ Event creation error:', error);
     }
   };
 
   const eventTypeOptions = [
     { 
-      value: EventType.SESSION, 
+      value: EventType.MENTORING_SESSION, 
       label: 'One-on-One Session',
       icon: <Users className="w-4 h-4" />,
       description: 'Individual mentoring session'
@@ -174,10 +196,28 @@ export const CreateEventForm: React.FC<CreateEventFormProps> = ({ onClose, onSuc
       description: 'Interactive learning workshop'
     },
     { 
-      value: EventType.GROUP_SESSION, 
-      label: 'Group Session',
+      value: EventType.WEBINAR, 
+      label: 'Webinar',
       icon: <UsersRound className="w-4 h-4" />,
-      description: 'Group mentoring session'
+      description: 'Online webinar or presentation'
+    },
+    { 
+      value: EventType.NETWORKING, 
+      label: 'Networking',
+      icon: <UsersRound className="w-4 h-4" />,
+      description: 'Networking event'
+    },
+    { 
+      value: EventType.SOCIAL, 
+      label: 'Social Event',
+      icon: <UsersRound className="w-4 h-4" />,
+      description: 'Social gathering'
+    },
+    { 
+      value: EventType.OTHER, 
+      label: 'Other',
+      icon: <Tag className="w-4 h-4" />,
+      description: 'Other type of event'
     },
   ];
 
@@ -355,12 +395,26 @@ export const CreateEventForm: React.FC<CreateEventFormProps> = ({ onClose, onSuc
                   <div>
                     <Input
                       name="location"
-                      label="Location"
+                      label="Location (Optional)"
                       value={formData.location}
                       onChange={handleChange}
-                      placeholder="Conference Room A, Zoom, or Google Meet"
+                      placeholder="Conference Room A, Building B"
                       leftIcon={<MapPin className="w-4 h-4" />}
                       error={errors.location}
+                      helperText="Leave empty for virtual events"
+                    />
+                  </div>
+
+                  <div>
+                    <Input
+                      name="meetingLink"
+                      label={!formData.location ? "Meeting Link (Required for Virtual Events)" : "Meeting Link (Optional)"}
+                      value={formData.meetingLink}
+                      onChange={handleChange}
+                      placeholder="https://meet.google.com/xxx or https://zoom.us/j/xxx"
+                      leftIcon={<Link className="w-4 h-4" />}
+                      error={errors.meetingLink}
+                      helperText={!formData.location ? "Provide the video conference link for this virtual event" : "Optional: Add a meeting link even for in-person events"}
                     />
                   </div>
 

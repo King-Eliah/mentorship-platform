@@ -7,6 +7,7 @@ import { Button } from '../ui/Button';
 import { Dropdown, DropdownItem, DropdownSeparator } from '../ui/Dropdown';
 import { GlobalSearch } from '../ui/GlobalSearch';
 import { NotificationBell } from '../notifications/NotificationBell';
+import { notify } from '../../utils/notifications';
 
 interface NavbarProps {
   onMobileMenuToggle: () => void;
@@ -106,14 +107,19 @@ export const Navbar: React.FC<NavbarProps> = ({ onMobileMenuToggle, sidebarColla
               <DropdownItem 
                 variant="destructive"
                 onClick={async () => {
-                  if (window.confirm('Are you sure you want to logout?')) {
-                    try {
-                      await logout();
-                      setIsUserMenuOpen(false);
-                    } catch (error) {
-                      console.error('Logout failed:', error);
+                  notify.confirm(
+                    'Are you sure you want to logout?',
+                    async () => {
+                      try {
+                        await logout();
+                        setIsUserMenuOpen(false);
+                        notify.success('Logged out successfully');
+                      } catch (error) {
+                        console.error('Logout failed:', error);
+                        notify.error('Failed to logout. Please try again.');
+                      }
                     }
-                  }
+                  );
                 }}
               >
                 <LogOut className="w-4 h-4 mr-3" />

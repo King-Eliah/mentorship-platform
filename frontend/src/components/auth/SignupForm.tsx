@@ -198,15 +198,15 @@ export const SignupForm: React.FC = () => {
   // Show pending approval screen
   if (registrationStep === 'pending') {
     return (
-      <div className="min-h-screen flex items-center justify-center py-8 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+      <div className="min-h-screen flex items-center justify-center py-6 sm:py-8 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
         <div className="max-w-lg w-full">
           <Card className="shadow-xl border-0 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm">
             <CardHeader>
               <div className="text-center">
-                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 mb-3 shadow-lg">
-                  <AlertCircle className="h-6 w-6 text-white" />
+                <div className="mx-auto flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 mb-2 sm:mb-3 shadow-lg">
+                  <AlertCircle className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                 </div>
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+                <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
                   Registration Submitted
                 </h2>
                 <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
@@ -214,8 +214,8 @@ export const SignupForm: React.FC = () => {
                 </p>
               </div>
             </CardHeader>
-            <CardContent className="text-center space-y-4">
-              <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+            <CardContent className="text-center space-y-3 sm:space-y-4">
+              <div className="p-3 sm:p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
                 <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
                   We'll review your application and notify you via email once your account has been approved.
                   This process typically takes 1-2 business days.
@@ -224,7 +224,7 @@ export const SignupForm: React.FC = () => {
               <div className="pt-2">
                 <Link
                   to="/login"
-                  className="inline-flex items-center justify-center w-full py-2.5 px-6 border border-transparent rounded-lg shadow-lg text-sm font-semibold text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 focus:outline-none focus:ring-4 focus:ring-blue-500/50 transition-all duration-200 transform hover:-translate-y-0.5"
+                  className="inline-flex items-center justify-center w-full py-2 sm:py-2.5 px-6 border border-transparent rounded-lg shadow-lg text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 focus:outline-none focus:ring-4 focus:ring-blue-500/50 transition-all duration-200 transform hover:-translate-y-0.5"
                 >
                   Back to Login
                 </Link>
@@ -233,8 +233,8 @@ export const SignupForm: React.FC = () => {
           </Card>
         </div>
 
-        {/* Keyboard Shortcut Hint - Bottom Left */}
-        <div className="fixed bottom-4 left-4">
+        {/* Keyboard Shortcut Hint - Bottom Left - Hidden on Mobile */}
+        <div className="fixed bottom-4 left-4 hidden sm:block">
           <div className="text-xs text-gray-500 dark:text-gray-400 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm">
             <kbd className="font-mono">Ctrl+Shift+D</kbd> to toggle theme
           </div>
@@ -244,14 +244,14 @@ export const SignupForm: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-8 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <div className="min-h-screen flex items-center justify-center py-6 sm:py-8 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       <div className="max-w-lg w-full">
         {/* Header Section */}
-        <div className="text-center mb-4">
-          <div className="mx-auto h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-3 shadow-lg">
-            <UserPlus className="h-6 w-6 text-white" />
+        <div className="text-center mb-3 sm:mb-4">
+          <div className="mx-auto h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-2 sm:mb-3 shadow-lg">
+            <UserPlus className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
           </div>
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent mb-1">
+          <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent mb-1">
             Join MentorConnect
           </h2>
           <p className="text-xs text-gray-600 dark:text-gray-400">
@@ -261,10 +261,10 @@ export const SignupForm: React.FC = () => {
 
         {/* Main Card */}
         <Card className="shadow-xl border-0 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm">
-          <CardContent className="p-5">
+          <CardContent className="p-4 sm:p-5">
             {/* General error message */}
             {generalError && (
-              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+              <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
                 <div className="flex items-center">
                   <AlertCircle className="w-4 h-4 text-red-500 mr-2 flex-shrink-0" />
                   <span className="text-xs text-red-700 dark:text-red-400 font-medium">
@@ -274,8 +274,8 @@ export const SignupForm: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4" noValidate>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
                   type="text"
                   name="firstName"
@@ -287,7 +287,7 @@ export const SignupForm: React.FC = () => {
                   required
                   error={getFieldError('firstName')}
                   inputSize="md"
-                  className="transition-all duration-200 hover:border-blue-400 focus:border-blue-500 dark:hover:border-blue-500 dark:focus:border-blue-400"
+                  className="transition-all duration-200 hover:border-blue-400 focus:border-blue-500 dark:hover:border-blue-500 dark:focus:border-blue-400 text-sm sm:text-base"
                   fullWidth
                 />
                 <Input
@@ -301,7 +301,7 @@ export const SignupForm: React.FC = () => {
                   required
                   error={getFieldError('lastName')}
                   inputSize="md"
-                  className="transition-all duration-200 hover:border-blue-400 focus:border-blue-500 dark:hover:border-blue-500 dark:focus:border-blue-400"
+                  className="transition-all duration-200 hover:border-blue-400 focus:border-blue-500 dark:hover:border-blue-500 dark:focus:border-blue-400 text-sm sm:text-base"
                   fullWidth
                 />
               </div>
@@ -558,7 +558,7 @@ export const SignupForm: React.FC = () => {
               </Button>
             </form>
 
-            <div className="mt-4 text-center">
+            <div className="mt-3 sm:mt-4 text-center">
               <p className="text-xs text-gray-600 dark:text-gray-400">
                 Already have an account?{' '}
                 <Link
@@ -573,8 +573,8 @@ export const SignupForm: React.FC = () => {
         </Card>
       </div>
 
-      {/* Keyboard Shortcut Hint - Bottom Left */}
-      <div className="fixed bottom-4 left-4">
+      {/* Keyboard Shortcut Hint - Bottom Left - Hidden on Mobile */}
+      <div className="fixed bottom-4 left-4 hidden sm:block">
         <div className="text-xs text-gray-500 dark:text-gray-400 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm">
           <kbd className="font-mono">Ctrl+Shift+D</kbd> to toggle theme
         </div>

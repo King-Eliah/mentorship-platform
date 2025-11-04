@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { 
   Users, 
   UserCheck, 
@@ -14,7 +15,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { Role, EventStatus, GoalStatus } from '../../types';
 import { eventService } from '../../services/eventService';
 import { goalService } from '../../services/goalService';
-import { frontendService } from '../../services/frontendService';
+import { groupService } from '../../services/groupService';
+import backendService from '../../services/backendService';
 
 interface StatsCardProps {
   title: string;
@@ -80,8 +82,8 @@ const StatsCard: React.FC<StatsCardProps> = ({
     // Mentor cards
     if (isMentor) {
       if (title === 'Active Mentees') return isDark ? 'bg-gradient-to-br from-indigo-500/20 to-indigo-600/20' : 'bg-gradient-to-br from-indigo-50 to-indigo-100';
-      if (title === 'Upcoming Sessions') return isDark ? 'bg-gradient-to-br from-cyan-500/20 to-cyan-600/20' : 'bg-gradient-to-br from-cyan-50 to-cyan-100';
-      if (title === 'Sessions Completed') return isDark ? 'bg-gradient-to-br from-emerald-500/20 to-emerald-600/20' : 'bg-gradient-to-br from-emerald-50 to-emerald-100';
+      if (title === 'Upcoming Events') return isDark ? 'bg-gradient-to-br from-cyan-500/20 to-cyan-600/20' : 'bg-gradient-to-br from-cyan-50 to-cyan-100';
+      if (title === 'Events Completed') return isDark ? 'bg-gradient-to-br from-emerald-500/20 to-emerald-600/20' : 'bg-gradient-to-br from-emerald-50 to-emerald-100';
       if (title === 'Messages') return isDark ? 'bg-gradient-to-br from-rose-500/20 to-rose-600/20' : 'bg-gradient-to-br from-rose-50 to-rose-100';
     }
     
@@ -108,8 +110,8 @@ const StatsCard: React.FC<StatsCardProps> = ({
     // Mentor cards
     if (isMentor) {
       if (title === 'Active Mentees') return 'text-indigo-600';
-      if (title === 'Upcoming Sessions') return 'text-cyan-600';
-      if (title === 'Sessions Completed') return 'text-emerald-600';
+      if (title === 'Upcoming Events') return 'text-cyan-600';
+      if (title === 'Events Completed') return 'text-emerald-600';
       if (title === 'Messages') return 'text-rose-600';
     }
     
@@ -194,6 +196,22 @@ interface DashboardStatsProps {
 
 const DashboardStats: React.FC<DashboardStatsProps> = ({ loading = false, dashboardData = {} }) => {
   const { user } = useAuth();
+  
+  // Fetch real admin stats with React Query
+  const { data: adminAnalytics, isLoading: loadingAdminStats } = useQuery({
+    queryKey: ['admin-analytics'],
+    queryFn: async () => {
+      const response = await backendService.admin.getAnalytics() as {
+        users: { total: number; mentors: number; mentees: number; admins: number; active: number };
+        events: { total: number };
+        groups: { total: number };
+      };
+      return response;
+    },
+    enabled: user?.role === Role.ADMIN,
+    refetchInterval: 5000, // Auto-refresh every 5 seconds
+  });
+  
   const [menteeStats, setMenteeStats] = useState({
     activeGoals: 0,
     completedGoals: 0,
@@ -220,16 +238,16 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ loading = false, dashbo
           const now = new Date();
           const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
           const upcomingEventsThisWeek = joinedEvents.filter(event => {
-            const eventDate = new Date(event.scheduledAt);
-            return event.status === EventStatus.SCHEDULED && 
+            const eventDate = new Date(event.scheduledAt || event.startTime);
+            return event.status === EventStatus.UPCOMING && 
                    eventDate >= now && 
                    eventDate <= oneWeekFromNow;
           }).length;
 
           // Get goals data
           const goals = await goalService.getGoals(user.id);
-          const activeGoals = goals.filter((g: any) => g.status !== GoalStatus.COMPLETED).length;
-          const completedGoals = goals.filter((g: any) => g.status === GoalStatus.COMPLETED).length;
+          const activeGoals = goals.filter(g => g.status !== GoalStatus.COMPLETED).length;
+          const completedGoals = goals.filter(g => g.status === GoalStatus.COMPLETED).length;
 
           setMenteeStats({
             activeGoals,
@@ -252,8 +270,8 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ loading = false, dashbo
       if (user?.role === Role.MENTOR) {
         try {
           // 1. Get active mentees count
-          const groups = await frontendService.getGroups();
-          const mentorGroup = groups.find((g: any) => g.mentorId === user.id);
+          const groups = await groupService.getMyGroups();
+          const mentorGroup = groups.find(g => g.mentorId === user.id);
           const activeMentees = mentorGroup?.members?.length || 0;
 
           // 2. Get upcoming sessions (events created by mentor in next 7 days)
@@ -262,8 +280,8 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ loading = false, dashbo
           const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
           
           const upcomingSessions = allEvents.filter(event => {
-            const eventDate = new Date(event.scheduledAt);
-            return event.organizerId === user.id && 
+            const eventDate = new Date(event.scheduledAt || event.startTime);
+            return (event.organizerId || event.creatorId) === user.id && 
                    eventDate >= now && 
                    eventDate <= nextWeek &&
                    event.status !== EventStatus.CANCELLED;
@@ -271,7 +289,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ loading = false, dashbo
 
           // 3. Get completed sessions (events created by mentor that are completed)
           const completedSessions = allEvents.filter(event => 
-            event.organizerId === user.id && 
+            (event.organizerId || event.creatorId) === user.id && 
             event.status === EventStatus.COMPLETED
           ).length;
 
@@ -295,7 +313,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ loading = false, dashbo
         return [
           {
             title: 'Total Users',
-            value: dashboardData.totalUsers || 0,
+            value: adminAnalytics?.users?.total || dashboardData.totalUsers || 0,
             icon: Users,
             change: '+12%',
             changeType: 'positive' as const,
@@ -303,7 +321,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ loading = false, dashbo
           },
           {
             title: 'Active Mentors',
-            value: dashboardData.totalMentors || 0,
+            value: adminAnalytics?.users?.mentors || dashboardData.totalMentors || 0,
             icon: UserCheck,
             change: '+8%',
             changeType: 'positive' as const,
@@ -311,7 +329,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ loading = false, dashbo
           },
           {
             title: 'Total Sessions',
-            value: dashboardData.totalSessions || 0,
+            value: adminAnalytics?.events?.total || dashboardData.totalSessions || 0,
             icon: Calendar,
             change: '+15%',
             changeType: 'positive' as const,
@@ -319,7 +337,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ loading = false, dashbo
           },
           {
             title: 'Total Events',
-            value: dashboardData.totalEvents || 0,
+            value: adminAnalytics?.events?.total || dashboardData.totalEvents || 0,
             icon: CalendarCheck,
             change: '+5%',
             changeType: 'positive' as const,
@@ -338,7 +356,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ loading = false, dashbo
             changeType: 'positive' as const
           },
           {
-            title: 'Upcoming Sessions',
+            title: 'Upcoming Events',
             value: mentorStats.upcomingSessions,
             icon: Clock,
             subtitle: 'Scheduled this week',
@@ -346,7 +364,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ loading = false, dashbo
             changeType: 'neutral' as const
           },
           {
-            title: 'Sessions Completed',
+            title: 'Events Completed',
             value: mentorStats.completedSessions,
             icon: Award,
             subtitle: 'Total completed',
@@ -418,7 +436,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ loading = false, dashbo
             change={stat.change}
             changeType={stat.changeType}
             subtitle={stat.subtitle}
-            loading={loading}
+            loading={user?.role === Role.ADMIN ? loadingAdminStats || loading : loading}
           />
         ))}
       </div>

@@ -1,24 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Calendar, Target, Award, MessageSquare, TrendingUp, BookOpen, Clock, CheckCircle, Circle } from 'lucide-react';
+import { Users, Target, MessageSquare, CheckCircle, AlertTriangle, Calendar } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { ListSkeleton, CardSkeleton } from '../components/ui/Skeleton';
-import { Modal } from '../components/ui/Modal';
-import { Role, EventStatus, GoalStatus, Event as EventType } from '../types';
+import { ListSkeleton } from '../components/ui/Skeleton';
+import { Role, GoalStatus } from '../types';
 import { Goal } from '../types/goals';
-import { frontendService } from '../services/frontendService';
-import { eventService } from '../services/eventService';
+import { Event } from '../services/eventService';
+import { userService } from '../services/userService';
 import { goalService } from '../services/goalService';
-import { GroupManagement } from '../components/admin/GroupManagement';
+import { eventService } from '../services/eventService';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 interface MenteeStats {
   activeGoals: number;
   completedGoals: number;
+  totalGoals: number;
   eventsJoined: number;
-  upcomingEvents: number;
-  resourcesAccessed: number;
 }
 
 interface MenteeWithStats {
@@ -28,8 +27,9 @@ interface MenteeWithStats {
   email: string;
   avatar?: string;
   stats: MenteeStats;
-  goals?: Goal[];
-  events?: EventType[];
+  goals: Goal[];
+  goalsNeedingHelp: Goal[];
+  events: Event[];
 }
 
 export const MyMentees: React.FC = () => {
@@ -37,432 +37,446 @@ export const MyMentees: React.FC = () => {
   const navigate = useNavigate();
   const [mentees, setMentees] = useState<MenteeWithStats[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedMentee, setSelectedMentee] = useState<MenteeWithStats | null>(null);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [loadingDetails, setLoadingDetails] = useState(false);
 
-  const fetchMenteesWithStats = async () => {
-    if (user?.role !== Role.MENTOR) return;
+  const fetchMenteesData = async () => {
+    if (user?.role !== Role.MENTOR || !user?.id) return;
 
     try {
       setLoading(true);
-      const groups = await frontendService.getGroups();
-      const mentorGroup = groups.find((g) => g.mentorId === user.id);
+      
+      // Fetch all mentees' goals using the same method as dashboard
+      const allGoals = await goalService.getMentorAssignedGoals(user.id);
+      
+      // Group goals by mentee userId
+      const menteeGoalsMap = new Map<string, Goal[]>();
+      
+      allGoals.forEach(goal => {
+        const menteeId = goal.userId;
+        if (!menteeGoalsMap.has(menteeId)) {
+          menteeGoalsMap.set(menteeId, []);
+        }
+        menteeGoalsMap.get(menteeId)!.push(goal);
+      });
 
-      if (mentorGroup) {
-        const allUsers = await frontendService.getUsers();
-        const groupMentees = allUsers.filter(u => 
-          u.role === 'MENTEE' && u.isActive
-        );
+      // Calculate stats for each mentee
+      const menteesData: MenteeWithStats[] = [];
 
-        // Fetch stats for each mentee
-        const menteesWithStats = await Promise.all(
-          groupMentees.map(async (mentee) => {
-            const stats = await fetchMenteeStats(mentee.id);
-            return {
-              ...mentee,
-              stats
-            };
-          })
-        );
-
-        setMentees(menteesWithStats);
+      // Fetch mentee details and calculate stats
+      for (const [menteeId, goals] of menteeGoalsMap.entries()) {
+        try {
+          // Fetch mentee user profile
+          const menteeUser = await userService.getUserProfile(menteeId);
+          
+          // Fetch mentee's events
+          const events = await eventService.getUserEvents(menteeId);
+          
+          // Filter goals needing help
+          const goalsNeedingHelp = goals.filter(g => g.needsHelp === true);
+          
+          // Calculate stats
+          const activeGoals = goals.filter(g => 
+            g.status === GoalStatus.IN_PROGRESS || 
+            g.status === GoalStatus.NOT_STARTED ||
+            g.status === GoalStatus.OVERDUE
+          ).length;
+          
+          const completedGoals = goals.filter(g => 
+            g.status === GoalStatus.COMPLETED
+          ).length;
+          
+          menteesData.push({
+            id: menteeUser.id,
+            firstName: menteeUser.firstName,
+            lastName: menteeUser.lastName,
+            email: menteeUser.email,
+            avatar: (menteeUser as { avatar?: string }).avatar,
+            stats: {
+              activeGoals,
+              completedGoals,
+              totalGoals: goals.length,
+              eventsJoined: events.length
+            },
+            goals,
+            goalsNeedingHelp,
+            events
+          });
+        } catch (error) {
+          console.error(`Error fetching data for mentee ${menteeId}:`, error);
+        }
       }
+
+      // Sort mentees - those with help requests first
+      menteesData.sort((a, b) => {
+        if (a.goalsNeedingHelp.length > 0 && b.goalsNeedingHelp.length === 0) return -1;
+        if (a.goalsNeedingHelp.length === 0 && b.goalsNeedingHelp.length > 0) return 1;
+        return 0;
+      });
+
+      setMentees(menteesData);
     } catch (error) {
       console.error('Failed to fetch mentees:', error);
+      toast.error('Failed to load mentees data');
+      setMentees([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchMenteeStats = async (menteeId: string): Promise<MenteeStats> => {
-    try {
-      // Get events
-      const joinedEvents = await eventService.getJoinedEvents();
-      const eventsJoined = joinedEvents.length;
-      
-      const now = new Date();
-      const upcomingEvents = joinedEvents.filter(event => {
-        const eventDate = new Date(event.scheduledAt);
-        return event.status === EventStatus.SCHEDULED && eventDate >= now;
-      }).length;
-
-      // Get goals
-      const goals = await goalService.getGoals(menteeId);
-      const activeGoals = goals.filter((g) => g.status !== GoalStatus.COMPLETED).length;
-      const completedGoals = goals.filter((g) => g.status === GoalStatus.COMPLETED).length;
-
-      // Get resources accessed (from localStorage)
-      const sharedResources = JSON.parse(
-        localStorage.getItem(`shared_resources_${menteeId}`) || '[]'
-      );
-
-      return {
-        activeGoals,
-        completedGoals,
-        eventsJoined,
-        upcomingEvents,
-        resourcesAccessed: sharedResources.length,
-      };
-    } catch (error) {
-      console.error('Failed to fetch mentee stats:', error);
-      return {
-        activeGoals: 0,
-        completedGoals: 0,
-        eventsJoined: 0,
-        upcomingEvents: 0,
-        resourcesAccessed: 0,
-      };
-    }
-  };
-
   useEffect(() => {
-    fetchMenteesWithStats();
+    fetchMenteesData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-  
-  // If user is admin, show GroupManagement component
-  if (user?.role === Role.ADMIN) {
-    return <GroupManagement />;
-  }
+  }, [user?.id]);
 
   const handleSendMessage = (menteeId: string) => {
-    navigate('/messages', { state: { recipientId: menteeId } });
+    navigate(`/messages?userId=${menteeId}`);
   };
 
-  const handleViewDetails = async (mentee: MenteeWithStats) => {
-    setSelectedMentee(mentee);
-    setShowDetailsModal(true);
-    setLoadingDetails(true);
-
-    try {
-      // Fetch detailed goals and events
-      const [goals, joinedEvents] = await Promise.all([
-        goalService.getGoals(mentee.id),
-        eventService.getJoinedEvents()
-      ]);
-
-      setSelectedMentee(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          goals: (goals || []) as Goal[],
-          events: (joinedEvents || []) as EventType[]
-        };
-      });
-    } catch (error) {
-      console.error('Failed to fetch mentee details:', error);
-    } finally {
-      setLoadingDetails(false);
-    }
+  const handleRefresh = () => {
+    toast.promise(fetchMenteesData(), {
+      loading: 'Refreshing data...',
+      success: 'Data refreshed!',
+      error: 'Failed to refresh'
+    });
   };
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Mentees</h1>
-            <p className="mt-1 text-gray-600 dark:text-gray-400">
-              Overview of all your assigned mentees and their progress
-            </p>
-          </div>
+      <div className="space-y-6 p-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Mentees</h1>
+          <p className="text-gray-600 dark:text-gray-400">Loading mentee data...</p>
         </div>
-        <ListSkeleton items={3} itemComponent={CardSkeleton} />
+        <ListSkeleton items={3} />
+      </div>
+    );
+  }
+
+  if (mentees.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Users className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            No Mentees Assigned
+          </h3>
+          <p className="text-gray-500 dark:text-gray-400">
+            You don't have any mentees assigned to you yet.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Mentees</h1>
-          <p className="mt-1 text-gray-600 dark:text-gray-400">
-            Overview of all your assigned mentees and their progress
-          </p>
-        </div>
-        <div className="text-sm text-gray-600 dark:text-gray-400">
-          <Users className="w-4 h-4 inline mr-1" />
-          {mentees.length} Total Mentees
-        </div>
-      </div>
-
-      {mentees.length === 0 ? (
-        <Card>
-          <CardContent className="text-center py-12">
-            <Users className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              No Mentees Yet
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              You don't have any assigned mentees at the moment.
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">My Mentoring Group</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">
+              Mentorship group led by {user?.firstName} {user?.lastName}
             </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {mentees.map((mentee) => (
-            <div 
-              key={mentee.id} 
-              className="cursor-pointer"
-              onClick={() => handleViewDetails(mentee)}
-            >
-              <Card className="overflow-hidden hover:shadow-lg transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-4">
-                    {/* Mentee Avatar & Info - Compact */}
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold">
-                          {mentee.firstName?.[0]}{mentee.lastName?.[0]}
+          </div>
+          <Button onClick={handleRefresh} variant="outline">
+            Refresh Data
+          </Button>
+        </div>
+
+        {/* Summary Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card className="bg-white dark:bg-gray-800">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Total Mentees</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white">{mentees.length}</p>
+                </div>
+                <Users className="w-10 h-10 text-blue-500" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white dark:bg-gray-800">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Active Goals</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                    {mentees.reduce((sum, m) => sum + m.stats.activeGoals, 0)}
+                  </p>
+                </div>
+                <Target className="w-10 h-10 text-orange-500" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white dark:bg-gray-800">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Total Events</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                    {mentees.reduce((sum, m) => sum + m.stats.eventsJoined, 0)}
+                  </p>
+                </div>
+                <Calendar className="w-10 h-10 text-blue-500" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white dark:bg-gray-800">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Need Help</p>
+                  <p className="text-3xl font-bold text-red-600 dark:text-red-400">
+                    {mentees.filter(m => m.goalsNeedingHelp.length > 0).length}
+                  </p>
+                </div>
+                <AlertTriangle className="w-10 h-10 text-red-500" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Mentees List */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            My Mentees ({mentees.length})
+          </h2>
+
+          {mentees.map((mentee) => {
+            const hasHelpRequests = mentee.goalsNeedingHelp.length > 0;
+            
+            return (
+              <Card
+                key={mentee.id}
+                className={`${
+                  hasHelpRequests
+                    ? 'border-2 border-red-500 bg-red-50 dark:bg-red-900/20'
+                    : 'bg-white dark:bg-gray-800'
+                }`}
+              >
+                <CardContent className="p-6">
+                  {/* Help Request Alert */}
+                  {hasHelpRequests && (
+                    <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/40 border-l-4 border-red-500 rounded">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-red-900 dark:text-red-200 mb-2">
+                            🚨 Help Requested - {mentee.goalsNeedingHelp.length} Goal{mentee.goalsNeedingHelp.length !== 1 ? 's' : ''}
+                          </h4>
+                          <div className="space-y-3">
+                            {mentee.goalsNeedingHelp.map((goal) => (
+                              <div key={goal.id} className="bg-white dark:bg-gray-800 p-3 rounded-lg">
+                                <div className="flex items-start gap-2">
+                                  <Target className="w-4 h-4 text-red-600 dark:text-red-400 mt-1 flex-shrink-0" />
+                                  <div className="flex-1">
+                                    <p className="font-medium text-red-900 dark:text-red-200">
+                                      {goal.title}
+                                    </p>
+                                    {goal.description && (
+                                      <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                                        {goal.description}
+                                      </p>
+                                    )}
+                                    <div className="flex items-center gap-4 mt-2 text-xs text-red-600 dark:text-red-400">
+                                      <span>Status: {goal.status}</span>
+                                      {goal.helpRequestedAt && (
+                                        <span>
+                                          Requested: {new Date(goal.helpRequestedAt).toLocaleDateString()} at {new Date(goal.helpRequestedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                          {mentee.firstName} {mentee.lastName}
-                        </h3>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                          {mentee.email}
-                        </p>
+                    </div>
+                  )}
+
+                  {/* Mentee Info */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
+                        {mentee.firstName[0]}{mentee.lastName[0]}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                            {mentee.firstName} {mentee.lastName}
+                          </h3>
+                          {hasHelpRequests && (
+                            <span className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded">
+                              {mentee.goalsNeedingHelp.length} HELP
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-500 dark:text-gray-400">{mentee.email}</p>
                       </div>
                     </div>
-
-                    {/* Stats - Compact Grid */}
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    {/* Active Goals */}
-                    <div className="text-center px-3 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg min-w-[60px]">
-                      <div className="flex items-center justify-center gap-1 mb-0.5">
-                        <Target className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-                        <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Goals</span>
-                      </div>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {mentee.stats.activeGoals}
-                      </p>
-                    </div>
-
-                    {/* Completed Goals */}
-                    <div className="text-center px-3 py-2 bg-green-50 dark:bg-green-900/20 rounded-lg min-w-[60px]">
-                      <div className="flex items-center justify-center gap-1 mb-0.5">
-                        <Award className="w-3 h-3 text-green-600 dark:text-green-400" />
-                        <span className="text-xs font-medium text-green-600 dark:text-green-400">Done</span>
-                      </div>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {mentee.stats.completedGoals}
-                      </p>
-                    </div>
-
-                    {/* Events */}
-                    <div className="text-center px-3 py-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg min-w-[60px]">
-                      <div className="flex items-center justify-center gap-1 mb-0.5">
-                        <Calendar className="w-3 h-3 text-purple-600 dark:text-purple-400" />
-                        <span className="text-xs font-medium text-purple-600 dark:text-purple-400">Events</span>
-                      </div>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {mentee.stats.eventsJoined}
-                      </p>
-                    </div>
-
-                    {/* Progress Badge */}
-                    <div className="text-center px-3 py-2 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-lg min-w-[60px]">
-                      <div className="flex items-center justify-center gap-1 mb-0.5">
-                        <TrendingUp className="w-3 h-3 text-orange-600 dark:text-orange-400" />
-                        <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Progress</span>
-                      </div>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {mentee.stats.completedGoals > 0 
-                          ? Math.round((mentee.stats.completedGoals / (mentee.stats.activeGoals + mentee.stats.completedGoals)) * 100)
-                          : 0}%
-                      </p>
-                    </div>
-                  </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex gap-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleSendMessage(mentee.id)}
-                        className="px-3 py-1.5"
+                        onClick={() => navigate(`/my-mentees/${mentee.id}`)}
                       >
-                        <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
+                        View Details
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handleSendMessage(mentee.id)}
+                      >
+                        <MessageSquare className="w-4 h-4 mr-1" />
                         Message
                       </Button>
                     </div>
                   </div>
+
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Target className="w-4 h-4 text-orange-500" />
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Active Goals</span>
+                      </div>
+                      <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                        {mentee.stats.activeGoals}
+                      </p>
+                    </div>
+
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Completed</span>
+                      </div>
+                      <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                        {mentee.stats.completedGoals}
+                      </p>
+                    </div>
+
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Target className="w-4 h-4 text-purple-500" />
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Total Goals</span>
+                      </div>
+                      <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                        {mentee.stats.totalGoals}
+                      </p>
+                    </div>
+
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Calendar className="w-4 h-4 text-blue-500" />
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Events</span>
+                      </div>
+                      <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                        {mentee.stats.eventsJoined}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* All Goals Summary */}
+                  {mentee.goals.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <details className="cursor-pointer">
+                        <summary className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
+                          View All Goals ({mentee.goals.length})
+                        </summary>
+                        <div className="mt-3 space-y-2">
+                          {mentee.goals.map((goal) => (
+                            <div
+                              key={goal.id}
+                              className={`p-3 rounded-lg ${
+                                goal.needsHelp
+                                  ? 'bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700'
+                                  : 'bg-gray-100 dark:bg-gray-700/50'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <p className="font-medium text-gray-900 dark:text-white">
+                                    {goal.title}
+                                  </p>
+                                  <div className="flex gap-3 mt-1 text-xs text-gray-600 dark:text-gray-400">
+                                    <span>Status: {goal.status}</span>
+                                    <span>Priority: {goal.priority}</span>
+                                    {goal.dueDate && (
+                                      <span>Due: {new Date(goal.dueDate).toLocaleDateString()}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                {goal.needsHelp && (
+                                  <span className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded">
+                                    HELP
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    </div>
+                  )}
+
+                  {/* Events Summary */}
+                  {mentee.events && mentee.events.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <details className="cursor-pointer">
+                        <summary className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
+                          View Events Joined ({mentee.events.length})
+                        </summary>
+                        <div className="mt-3 space-y-2">
+                          {mentee.events.map((event) => (
+                            <div
+                              key={event.id}
+                              className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800"
+                            >
+                              <div className="flex items-start gap-3">
+                                <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-1 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <p className="font-medium text-gray-900 dark:text-white">
+                                    {event.title}
+                                  </p>
+                                  <div className="flex gap-3 mt-1 text-xs text-gray-600 dark:text-gray-400">
+                                    <span>Type: {event.type}</span>
+                                    <span>Status: {event.status}</span>
+                                    {event.startTime && (
+                                      <span>
+                                        Date: {new Date(event.startTime).toLocaleDateString()} at{' '}
+                                        {new Date(event.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {event.location && (
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                      📍 {event.location}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-            </div>
-          ))}
+            );
+          })}
         </div>
-      )}
-
-      {/* Details Modal */}
-      {selectedMentee && (
-        <Modal
-          isOpen={showDetailsModal}
-          onClose={() => setShowDetailsModal(false)}
-          title={`${selectedMentee.firstName} ${selectedMentee.lastName} - Details`}
-        >
-          <div className="space-y-6">
-            {/* Mentee Info Header */}
-            <div className="flex items-center gap-4 pb-4 border-b border-gray-200 dark:border-gray-700">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold">
-                {selectedMentee.firstName?.[0]}{selectedMentee.lastName?.[0]}
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {selectedMentee.firstName} {selectedMentee.lastName}
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">{selectedMentee.email}</p>
-              </div>
-            </div>
-
-            {/* Stats Overview */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-center">
-                <Target className="w-5 h-5 text-blue-600 dark:text-blue-400 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{selectedMentee.stats.activeGoals}</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">Active Goals</p>
-              </div>
-              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
-                <Award className="w-5 h-5 text-green-600 dark:text-green-400 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{selectedMentee.stats.completedGoals}</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">Completed</p>
-              </div>
-              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 text-center">
-                <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{selectedMentee.stats.eventsJoined}</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">Events</p>
-              </div>
-              <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3 text-center">
-                <BookOpen className="w-5 h-5 text-orange-600 dark:text-orange-400 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{selectedMentee.stats.resourcesAccessed}</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">Resources</p>
-              </div>
-            </div>
-
-            {/* Goals Section */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                <Target className="w-4 h-4" />
-                Goals ({selectedMentee.goals?.length || 0})
-              </h4>
-              {loadingDetails ? (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                </div>
-              ) : selectedMentee.goals && selectedMentee.goals.length > 0 ? (
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {selectedMentee.goals.map((goal) => (
-                    <div key={goal.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            {goal.status === GoalStatus.COMPLETED ? (
-                              <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                            ) : (
-                              <Circle className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            )}
-                            <h5 className="text-sm font-medium text-gray-900 dark:text-white">{goal.title}</h5>
-                          </div>
-                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 ml-6 line-clamp-2">{goal.description}</p>
-                        </div>
-                        <span className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${
-                          goal.status === GoalStatus.COMPLETED 
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                            : goal.status === GoalStatus.IN_PROGRESS
-                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                            : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                        }`}>
-                          {goal.status.replace('_', ' ')}
-                        </span>
-                      </div>
-                      <div className="mt-2 ml-6">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-blue-600 dark:bg-blue-500 rounded-full transition-all"
-                              style={{ width: `${goal.progress}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-gray-600 dark:text-gray-400 flex-shrink-0">{goal.progress}%</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No goals yet</p>
-              )}
-            </div>
-
-            {/* Events Section */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                Events Attended ({selectedMentee.events?.length || 0})
-              </h4>
-              {loadingDetails ? (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-                </div>
-              ) : selectedMentee.events && selectedMentee.events.length > 0 ? (
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {selectedMentee.events.slice(0, 5).map((event) => (
-                    <div key={event.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <h5 className="text-sm font-medium text-gray-900 dark:text-white">{event.title}</h5>
-                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {new Date(event.scheduledAt).toLocaleDateString('en-US', { 
-                              month: 'short', 
-                              day: 'numeric', 
-                              year: 'numeric' 
-                            })}
-                          </p>
-                        </div>
-                        <span className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${
-                          event.status === EventStatus.COMPLETED
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                            : event.status === EventStatus.SCHEDULED
-                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                            : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                        }`}>
-                          {event.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No events attended yet</p>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <Button
-                onClick={() => {
-                  handleSendMessage(selectedMentee.id);
-                  setShowDetailsModal(false);
-                }}
-                className="flex-1"
-              >
-                <MessageSquare className="w-4 h-4 mr-2" />
-                Send Message
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowDetailsModal(false)}
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      </div>
     </div>
   );
 };
+
+export default MyMentees;

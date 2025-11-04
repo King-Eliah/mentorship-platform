@@ -1,12 +1,17 @@
 import React from 'react';
 import { Bell } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useNotifications } from '../hooks/useNotifications';
+import { useNotifications, useMarkAsRead, useMarkAllAsRead } from '../hooks/useNotifications';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
+import { Notification } from '../types';
 
 export const NotificationsPage: React.FC = () => {
-  const { notifications, loading, markAsRead, markAllAsRead } = useNotifications();
+  const { items: notifications, loading } = useNotifications();
+  const { mutate: markAsRead } = useMarkAsRead();
+  const { mutate: markAllAsRead } = useMarkAllAsRead();
+
+  const unreadCount = (notifications as Notification[]).filter(n => !n.isRead).length;
 
   if (loading) {
     return (
@@ -20,9 +25,11 @@ export const NotificationsPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Notifications</h1>
-        <Button onClick={markAllAsRead} size="sm">
-          Mark All Read
-        </Button>
+        {unreadCount > 0 && (
+          <Button onClick={() => markAllAsRead()} size="sm" variant="primary">
+            Mark All Read ({unreadCount})
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -34,18 +41,19 @@ export const NotificationsPage: React.FC = () => {
         <CardContent className="p-0">
           {notifications.length > 0 ? (
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {notifications.map((notification) => (
+              {(notifications as Notification[]).map((notification) => (
                 <div
                   key={notification.id}
-                  className={`p-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                  className={`p-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer ${
                     !notification.isRead ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                   }`}
+                  onClick={() => !notification.isRead && markAsRead(notification.id)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-2">
                         <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                          {notification.title}
+                          {notification.type}
                         </h4>
                         {!notification.isRead && (
                           <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
@@ -62,7 +70,10 @@ export const NotificationsPage: React.FC = () => {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => markAsRead(notification.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          markAsRead(notification.id);
+                        }}
                       >
                         Mark Read
                       </Button>

@@ -44,19 +44,23 @@ export const responsive = {
     section: 'py-6 sm:py-8 md:py-12',
     component: 'p-4 sm:p-6 md:p-8',
     gap: 'gap-4 sm:gap-6 md:gap-8',
-    margin: 'mb-4 sm:mb-6 md:mb-8'
+    margin: 'mb-4 sm:mb-6 md:mb-8',
+    gapMobile: 'gap-2 sm:gap-4 md:gap-6',
+    paddingMobile: 'p-3 sm:p-4 md:p-6',
+    paddingXMobile: 'px-3 sm:px-4 md:px-6',
+    paddingYMobile: 'py-2 sm:py-3 md:py-4'
   },
 
-  // Typography utilities
   text: {
     responsive: {
-      xs: 'text-xs sm:text-sm',
-      sm: 'text-sm sm:text-base',
-      base: 'text-base sm:text-lg',
-      lg: 'text-lg sm:text-xl',
-      xl: 'text-xl sm:text-2xl',
-      '2xl': 'text-2xl sm:text-3xl',
-      '3xl': 'text-3xl sm:text-4xl'
+      xs: 'text-xs sm:text-xs',
+      sm: 'text-xs sm:text-sm',
+      base: 'text-sm sm:text-base',
+      lg: 'text-base sm:text-lg',
+      xl: 'text-lg sm:text-xl',
+      '2xl': 'text-xl sm:text-2xl',
+      '3xl': 'text-2xl sm:text-3xl',
+      '4xl': 'text-3xl sm:text-4xl'
     },
     heading: {
       h1: 'text-2xl sm:text-3xl md:text-4xl font-bold',
@@ -66,19 +70,31 @@ export const responsive = {
     }
   },
 
-  // Button utilities
+  // Mobile first button sizing
   button: {
-    base: 'px-4 py-2 text-sm sm:px-6 sm:py-3 sm:text-base',
+    xs: 'px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-xs',
+    sm: 'px-3 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm',
+    md: 'px-4 py-2 text-sm sm:px-5 sm:py-2.5 sm:text-base',
+    lg: 'px-6 py-3 text-base sm:px-8 sm:py-3 sm:text-lg',
+    icon: 'p-1.5 sm:p-2 md:p-2.5',
     large: 'px-6 py-3 text-base sm:px-8 sm:py-4 sm:text-lg',
-    icon: 'p-2 sm:p-3',
     fullMobile: 'w-full sm:w-auto'
   },
 
-  // Card utilities
+  // Card sizing
   card: {
+    height: 'min-h-[300px] sm:min-h-[350px]',
+    padding: 'p-3 sm:p-4 md:p-6',
+    roundedMobile: 'rounded-lg sm:rounded-xl',
     base: 'rounded-lg border shadow-sm',
-    padding: 'p-4 sm:p-6',
     hover: 'hover:shadow-md transition-shadow duration-200'
+  },
+
+  // Input sizing
+  input: {
+    height: 'h-10 sm:h-11',
+    textSize: 'text-sm sm:text-base',
+    padding: 'px-3 sm:px-4 py-2 sm:py-2.5'
   },
 
   // Navigation utilities

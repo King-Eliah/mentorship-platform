@@ -1,119 +1,37 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, User, Calendar, MessageCircle, Clock, MapPin } from 'lucide-react';
-import { Role } from '../../types';
-
-// Mock data interfaces
-interface SearchUser {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-  avatar?: string;
-}
-
-interface SearchEvent {
-  id: string;
-  title: string;
-  date: string;
-  location: string;
-  type: string;
-}
-
-interface SearchMessage {
-  id: string;
-  content: string;
-  sender: string;
-  conversationId: string;
-  timestamp: string;
-}
-
-interface SearchResults {
-  users: SearchUser[];
-  events: SearchEvent[];
-  messages: SearchMessage[];
-}
-
-// Mock data
-const mockUsers: SearchUser[] = [
-  { id: '1', name: 'Sarah Johnson', email: 'sarah.j@email.com', role: Role.MENTOR },
-  { id: '2', name: 'Michael Chen', email: 'm.chen@email.com', role: Role.MENTEE },
-  { id: '3', name: 'Emily Davis', email: 'emily.davis@email.com', role: Role.ADMIN },
-  { id: '4', name: 'David Wilson', email: 'd.wilson@email.com', role: Role.MENTOR },
-  { id: '5', name: 'Lisa Thompson', email: 'lisa.t@email.com', role: Role.MENTEE },
-];
-
-const mockEvents: SearchEvent[] = [
-  { id: '1', title: 'Career Development Workshop', date: '2025-09-20', location: 'Conference Room A', type: 'workshop' },
-  { id: '2', title: 'Monthly Mentor Meetup', date: '2025-09-25', location: 'Virtual', type: 'meetup' },
-  { id: '3', title: 'Code Review Session', date: '2025-09-18', location: 'Dev Lab', type: 'session' },
-  { id: '4', title: 'Leadership Training', date: '2025-10-01', location: 'Main Hall', type: 'training' },
-  { id: '5', title: 'Q&A with Senior Devs', date: '2025-09-22', location: 'Virtual', type: 'qa' },
-];
-
-const mockMessages: SearchMessage[] = [
-  { id: '1', content: 'Great job on the project presentation!', sender: 'Sarah Johnson', conversationId: '1', timestamp: '2025-09-15T10:30:00Z' },
-  { id: '2', content: 'Can we schedule a meeting to discuss the code review?', sender: 'Michael Chen', conversationId: '2', timestamp: '2025-09-15T14:20:00Z' },
-  { id: '3', content: 'The workshop materials are now available in the shared folder', sender: 'Emily Davis', conversationId: '3', timestamp: '2025-09-15T09:15:00Z' },
-  { id: '4', content: 'Thanks for the feedback on my proposal', sender: 'David Wilson', conversationId: '4', timestamp: '2025-09-14T16:45:00Z' },
-  { id: '5', content: 'Looking forward to our mentoring session tomorrow', sender: 'Lisa Thompson', conversationId: '5', timestamp: '2025-09-14T18:30:00Z' },
-];
+import { performSearch, SearchResults } from '../../services/searchService';
 
 export const GlobalSearch: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
-  const [results, setResults] = useState<SearchResults>({ users: [], events: [], messages: [] });
+  const [results, setResults] = useState<SearchResults>({ users: [], events: [], resources: [], messages: [] });
   const [loading, setLoading] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
-  // Mock search function
-  const performSearch = (query: string): SearchResults => {
-    if (!query.trim()) {
-      return { users: [], events: [], messages: [] };
-    }
-
-    const searchLower = query.toLowerCase();
-
-    const filteredUsers = mockUsers.filter(user =>
-      user.name.toLowerCase().includes(searchLower) ||
-      user.email.toLowerCase().includes(searchLower) ||
-      user.role.toLowerCase().includes(searchLower)
-    ).slice(0, 3);
-
-    const filteredEvents = mockEvents.filter(event =>
-      event.title.toLowerCase().includes(searchLower) ||
-      event.location.toLowerCase().includes(searchLower) ||
-      event.type.toLowerCase().includes(searchLower)
-    ).slice(0, 3);
-
-    const filteredMessages = mockMessages.filter(message =>
-      message.content.toLowerCase().includes(searchLower) ||
-      message.sender.toLowerCase().includes(searchLower)
-    ).slice(0, 3);
-
-    return {
-      users: filteredUsers,
-      events: filteredEvents,
-      messages: filteredMessages
-    };
-  };
-
   // Handle search with debounce
   useEffect(() => {
     if (!searchTerm.trim()) {
-      setResults({ users: [], events: [], messages: [] });
+      setResults({ users: [], events: [], resources: [], messages: [] });
       setIsOpen(false);
       return;
     }
 
     setLoading(true);
-    const timeoutId = setTimeout(() => {
-      const searchResults = performSearch(searchTerm);
-      setResults(searchResults);
-      setIsOpen(true);
-      setLoading(false);
+    const timeoutId = setTimeout(async () => {
+      try {
+        const searchResults = await performSearch(searchTerm);
+        setResults(searchResults);
+        setIsOpen(true);
+      } catch (error) {
+        console.error('Search error:', error);
+        setResults({ users: [], events: [], resources: [], messages: [] });
+      } finally {
+        setLoading(false);
+      }
     }, 300);
 
     return () => clearTimeout(timeoutId);
@@ -132,20 +50,7 @@ export const GlobalSearch: React.FC = () => {
   }, []);
 
   const getTotalResults = () => {
-    return results.users.length + results.events.length + results.messages.length;
-  };
-
-  const getRoleColor = (role: Role) => {
-    switch (role) {
-      case Role.ADMIN:
-        return 'text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-900/20';
-      case Role.MENTOR:
-        return 'text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-900/20';
-      case Role.MENTEE:
-        return 'text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-900/20';
-      default:
-        return 'text-gray-600 bg-gray-50 dark:text-gray-400 dark:bg-gray-900/20';
-    }
+    return results.users.length + results.events.length + results.resources.length + results.messages.length;
   };
 
   const formatDate = (dateString: string) => {
@@ -229,17 +134,21 @@ export const GlobalSearch: React.FC = () => {
                     >
                       <div className="flex items-center space-x-3 flex-1">
                         <div className="w-8 h-8 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
-                          <User className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                          {user.avatar ? (
+                            <img src={user.avatar} alt={user.firstName} className="w-8 h-8 rounded-full" />
+                          ) : (
+                            <User className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                          )}
                         </div>
                         <div className="flex-1 text-left">
                           <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {user.name}
+                            {user.firstName} {user.lastName}
                           </p>
                           <div className="flex items-center space-x-2">
                             <p className="text-xs text-gray-500 dark:text-gray-400">
                               {user.email}
                             </p>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium text-primary-600 bg-primary-50 dark:text-primary-400 dark:bg-primary-900/20">
                               {user.role}
                             </span>
                           </div>
@@ -277,12 +186,14 @@ export const GlobalSearch: React.FC = () => {
                           <div className="flex items-center space-x-3 text-xs text-gray-500 dark:text-gray-400">
                             <div className="flex items-center space-x-1">
                               <Clock className="h-3 w-3" />
-                              <span>{formatDate(event.date)}</span>
+                              <span>{formatDate(event.startTime)}</span>
                             </div>
-                            <div className="flex items-center space-x-1">
-                              <MapPin className="h-3 w-3" />
-                              <span>{event.location}</span>
-                            </div>
+                            {event.location && (
+                              <div className="flex items-center space-x-1">
+                                <MapPin className="h-3 w-3" />
+                                <span>{event.location}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -302,7 +213,7 @@ export const GlobalSearch: React.FC = () => {
                       key={message.id}
                       className="w-full flex items-center px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       onClick={() => {
-                        navigate('/messages', { state: { conversationId: message.conversationId, fromSearch: true } });
+                        navigate('/messages', { state: { userId: message.sender.id, fromSearch: true } });
                         setIsOpen(false);
                         setSearchTerm('');
                       }}
@@ -316,9 +227,9 @@ export const GlobalSearch: React.FC = () => {
                             {message.content}
                           </p>
                           <div className="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
-                            <span>from {message.sender}</span>
+                            <span>from {message.sender.firstName} {message.sender.lastName}</span>
                             <span>•</span>
-                            <span>{formatTime(message.timestamp)}</span>
+                            <span>{formatTime(message.createdAt)}</span>
                           </div>
                         </div>
                       </div>

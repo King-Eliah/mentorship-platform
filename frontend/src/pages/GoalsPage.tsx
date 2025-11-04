@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Target, Search, Edit, Trash2, CheckCircle, Clock, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Plus, Target, Search, Edit, Trash2, CheckCircle, Clock, AlertCircle, Eye, EyeOff, HelpCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { DropdownSelect } from '../components/ui/DropdownSelect';
 import { Modal } from '../components/ui/Modal';
@@ -116,6 +116,37 @@ const GoalsPage: React.FC = () => {
     } catch (error) {
       toast.error('Failed to update goal visibility');
       console.error('Error updating goal visibility:', error);
+    }
+  };
+
+  const handleRequestHelp = async (goalId: string, currentNeedsHelp: boolean = false) => {
+    try {
+      const newNeedsHelp = !currentNeedsHelp;
+      await goalService.updateGoal(goalId, { 
+        needsHelp: newNeedsHelp,
+        helpRequestedAt: newNeedsHelp ? new Date().toISOString() : undefined
+      });
+      
+      // Update local state
+      setGoals(prev => 
+        prev.map(goal => 
+          goal.id === goalId 
+            ? { 
+                ...goal, 
+                needsHelp: newNeedsHelp, 
+                helpRequestedAt: newNeedsHelp ? new Date().toISOString() : undefined,
+                updatedAt: new Date().toISOString() 
+              }
+            : goal
+        )
+      );
+      toast.success(newNeedsHelp 
+        ? '🚨 Help request sent to your mentor!' 
+        : 'Help request cancelled'
+      );
+    } catch (error) {
+      toast.error('Failed to update help request');
+      console.error('Error updating help request:', error);
     }
   };
 
@@ -269,10 +300,11 @@ const GoalsPage: React.FC = () => {
             {filteredGoals.map((goal) => (
               <Card key={goal.id} className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} hover:shadow-lg transition-shadow`}>
                 <CardHeader className="pb-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2 flex-1">
+                  <div className="flex flex-col gap-3">
+                    {/* Status Row */}
+                    <div className="flex items-center gap-2">
                       {getStatusIcon(goal.status)}
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <DropdownSelect
                           placeholder="Status"
                           value={goal.status}
@@ -285,20 +317,32 @@ const GoalsPage: React.FC = () => {
                         />
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 ml-2">
+                    {/* Action Icons Row */}
+                    <div className="flex items-center justify-end gap-1 flex-wrap">
                       {user?.role === 'MENTEE' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleMentorVisibility(goal.id, goal.visibleToMentor)}
-                          title={goal.visibleToMentor !== false ? 'Visible to mentor - Click to hide' : 'Hidden from mentor - Click to show'}
-                        >
-                          {goal.visibleToMentor !== false ? (
-                            <Eye className="w-4 h-4 text-blue-600" />
-                          ) : (
-                            <EyeOff className="w-4 h-4 text-gray-400" />
-                          )}
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRequestHelp(goal.id, goal.needsHelp)}
+                            title={goal.needsHelp ? 'Cancel help request' : 'Request help from mentor'}
+                            className={goal.needsHelp ? 'bg-red-100 dark:bg-red-900/30' : ''}
+                          >
+                            <HelpCircle className={`w-4 h-4 ${goal.needsHelp ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}`} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleToggleMentorVisibility(goal.id, goal.visibleToMentor)}
+                            title={goal.visibleToMentor !== false ? 'Visible to mentor - Click to hide' : 'Hidden from mentor - Click to show'}
+                          >
+                            {goal.visibleToMentor !== false ? (
+                              <Eye className="w-4 h-4 text-blue-600" />
+                            ) : (
+                              <EyeOff className="w-4 h-4 text-gray-400" />
+                            )}
+                          </Button>
+                        </>
                       )}
                       <Button
                         variant="ghost"
@@ -322,20 +366,6 @@ const GoalsPage: React.FC = () => {
                   <p className={`text-sm mb-4 line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                     {goal.description}
                   </p>
-                  
-                  {/* Progress Bar */}
-                  <div className="mb-4">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>Progress</span>
-                      <span>{goal.progress}%</span>
-                    </div>
-                    <div className={`w-full bg-gray-200 rounded-full h-2 ${isDark ? 'bg-gray-700' : ''}`}>
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                        style={{ width: `${goal.progress}%` }}
-                      ></div>
-                    </div>
-                  </div>
 
                   <div className="flex justify-between text-sm">
                     <span className={`px-2 py-1 rounded text-xs ${goalService.getCategoryColor(goal.category)}`}>
@@ -352,6 +382,21 @@ const GoalsPage: React.FC = () => {
                     </div>
                   )}
                   
+                  {/* Help Request Indicator for Mentees */}
+                  {user?.role === 'MENTEE' && goal.needsHelp && (
+                    <div className="mt-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                      <div className="flex items-center gap-2 text-xs text-red-700 dark:text-red-400">
+                        <AlertCircle className="w-4 h-4" />
+                        <span className="font-medium">Help requested from mentor</span>
+                      </div>
+                      {goal.helpRequestedAt && (
+                        <p className="text-xs text-red-600 dark:text-red-500 mt-1">
+                          Requested {new Date(goal.helpRequestedAt).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Mentor Visibility Indicator for Mentees */}
                   {user?.role === 'MENTEE' && (
                     <div className={`flex items-center gap-1 mt-2 text-xs ${

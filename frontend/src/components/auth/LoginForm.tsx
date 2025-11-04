@@ -43,18 +43,14 @@ export const LoginForm: React.FC = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    console.log('Form submission triggered', { email, password }); // Debug
     e.preventDefault();
     setLoading(true);
     setErrors({});
     setGeneralError('');
 
     // Client-side validation
-    console.log('Validating form with email:', email, 'password:', password); // Debug
     const isValid = validateForm();
-    console.log('Validation result:', isValid, 'errors set:', errors); // Debug
     if (!isValid) {
-      console.log('Validation failed, errors should be set'); // Debug
       setLoading(false);
       return;
     }
@@ -83,30 +79,30 @@ export const LoginForm: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center py-6 sm:py-12 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+      <div className="max-w-md w-full space-y-6 sm:space-y-8">
         {/* Header Section */}
         <div className="text-center">
-          <div className="mx-auto h-16 w-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-4 shadow-xl transform hover:scale-105 transition-transform duration-200">
-            <Shield className="h-8 w-8 text-white" />
+          <div className="mx-auto h-12 w-12 sm:h-16 sm:w-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-3 sm:mb-4 shadow-xl transform hover:scale-105 transition-transform duration-200">
+            <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
           </div>
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent mb-2">
+          <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent mb-2">
             Welcome Back
           </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
             Sign in to your MentorConnect account
           </p>
         </div>
 
         {/* Main Card */}
         <Card className="shadow-2xl border-0 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm transform hover:scale-[1.01] transition-all duration-300">
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             {/* Error Message */}
             {generalError && (
-              <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl animate-in slide-in-from-top-2 duration-300">
+              <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl animate-in slide-in-from-top-2 duration-300">
                 <div className="flex items-center">
-                  <AlertCircle className="w-5 h-5 text-red-500 mr-3 flex-shrink-0" />
-                  <span className="text-sm text-red-700 dark:text-red-400 font-medium">
+                  <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 mr-2 sm:mr-3 flex-shrink-0" />
+                  <span className="text-xs sm:text-sm text-red-700 dark:text-red-400 font-medium">
                     {generalError}
                   </span>
                 </div>
@@ -114,8 +110,8 @@ export const LoginForm: React.FC = () => {
             )}
 
             {/* Login Form */}
-            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-              <div className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4" noValidate>
+              <div className="space-y-3 sm:space-y-4">
                 <div>
                   <Input
                     type="email"
@@ -127,7 +123,7 @@ export const LoginForm: React.FC = () => {
                     required
                     error={getFieldError('email')}
                     inputSize="md"
-                    className="transition-all duration-200 hover:border-blue-400 focus:border-blue-500 dark:hover:border-blue-500 dark:focus:border-blue-400"
+                    className="transition-all duration-200 hover:border-blue-400 focus:border-blue-500 dark:hover:border-blue-500 dark:focus:border-blue-400 text-sm sm:text-base"
                     fullWidth
                   />
                 </div>
@@ -144,7 +140,7 @@ export const LoginForm: React.FC = () => {
                     error={getFieldError('password')}
                     data-testid="login-password-input"
                     inputSize="md"
-                    className="transition-all duration-200 hover:border-blue-400 focus:border-blue-500 dark:hover:border-blue-500 dark:focus:border-blue-400"
+                    className="transition-all duration-200 hover:border-blue-400 focus:border-blue-500 dark:hover:border-blue-500 dark:focus:border-blue-400 text-sm sm:text-base"
                     showPasswordToggle={true}
                     fullWidth
                   />
@@ -152,20 +148,20 @@ export const LoginForm: React.FC = () => {
               </div>
 
               {/* Remember Me & Forgot Password */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between text-xs sm:text-sm">
                 <div className="flex items-center">
                   <input
                     id="remember-me"
                     name="remember-me"
                     type="checkbox"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded transition-colors bg-white dark:bg-gray-700"
+                    className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded transition-colors bg-white dark:bg-gray-700"
                   />
-                  <label htmlFor="remember-me" className="ml-3 block text-sm text-gray-700 dark:text-gray-300 font-medium">
+                  <label htmlFor="remember-me" className="ml-2 sm:ml-3 block text-gray-700 dark:text-gray-300 font-medium">
                     Remember me
                   </label>
                 </div>
 
-                <div className="text-sm">
+                <div>
                   <Link
                     to="/forgot-password"
                     className="font-semibold text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors duration-200"
@@ -179,7 +175,7 @@ export const LoginForm: React.FC = () => {
               <div>
                 <Button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold py-3 px-4 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5 focus:ring-4 focus:ring-blue-500/50 dark:focus:ring-blue-400/50"
+                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold py-2.5 sm:py-3 px-4 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5 focus:ring-4 focus:ring-blue-500/50 dark:focus:ring-blue-400/50 text-sm sm:text-base"
                   loading={loading}
                   size="md"
                   leftIcon={!loading ? <LogIn className="w-4 h-4" /> : undefined}
@@ -190,8 +186,8 @@ export const LoginForm: React.FC = () => {
             </form>
 
             {/* Sign Up Link */}
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
+            <div className="mt-4 sm:mt-6 text-center">
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                 Don't have an account?{' '}
                 <Link
                   to="/signup"
@@ -205,8 +201,8 @@ export const LoginForm: React.FC = () => {
         </Card>
       </div>
 
-      {/* Keyboard Shortcut Hint - Bottom Left */}
-      <div className="fixed bottom-4 left-4">
+      {/* Keyboard Shortcut Hint - Bottom Left - Hidden on Mobile */}
+      <div className="fixed bottom-4 left-4 hidden sm:block">
         <div className="text-xs text-gray-500 dark:text-gray-400 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm">
           <kbd className="font-mono">Ctrl+Shift+D</kbd> to toggle theme
         </div>

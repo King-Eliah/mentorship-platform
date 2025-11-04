@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Role } from '../../types';
+import { useUnreadCounts } from '../../hooks/useUnreadCounts';
 
 interface SubNavItem {
   name: string;
@@ -55,7 +56,7 @@ const navigation: NavItem[] = [
     ]
   },
   // Role-based group navigation
-  { name: 'Group Management', href: '/my-mentees', icon: Users, roles: [Role.ADMIN] },
+  { name: 'Group Management', href: '/groups', icon: Users, roles: [Role.ADMIN] },
   { name: 'My Mentees', href: '/my-mentees', icon: Users, roles: [Role.MENTOR] },
   { name: 'My Group', href: '/my-group', icon: Users, roles: [Role.MENTEE] },
   { name: 'Events', href: '/events', icon: Calendar },
@@ -63,7 +64,8 @@ const navigation: NavItem[] = [
   { name: 'Admin Panel', href: '/admin', icon: Settings, roles: [Role.ADMIN] },
   // Analytics navigation removed
   { name: 'Session Logs', href: '/sessions', icon: Clock, roles: [Role.ADMIN, Role.MENTOR] },
-  { name: 'Feedback Center', href: '/feedback', icon: Heart },
+  { name: 'Activity & Notifications', href: '/activities', icon: Heart },
+  { name: 'Feedback Center', href: '/feedback', icon: MessageSquare },
   { name: 'Incident Reports', href: '/incidents', icon: AlertTriangle },
   { name: 'Program Policies', href: '/policies', icon: Shield },
 ];
@@ -77,6 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const location = useLocation();
   const { user, logout } = useAuth();
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
+  const { counts } = useUnreadCounts();
 
   const toggleMenu = (itemName: string) => {
     setExpandedMenus(prev => 
@@ -84,6 +87,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ? prev.filter(name => name !== itemName)
         : [...prev, itemName]
     );
+  };
+
+  // Map navigation item names to their unread counts
+  const getUnreadCount = (itemName: string): number => {
+    switch (itemName) {
+      case 'Messaging':
+        return counts.messages;
+      case 'Resources':
+        return counts.resources;
+      case 'Events':
+        return counts.events;
+      case 'Feedback Center':
+        return counts.feedback;
+      case 'Incident Reports':
+        return counts.incidents;
+      default:
+        return 0;
+    }
   };
 
   const filteredNavigation = navigation.map(item => ({
@@ -171,6 +192,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const hasSubItems = item.subItems && item.subItems.length > 0;
               const isExpanded = expandedMenus.includes(item.name);
               const Icon = item.icon;
+              const unreadCount = getUnreadCount(item.name);
+              const hasUnread = unreadCount > 0;
 
               return (
                 <div key={item.name}>
@@ -190,13 +213,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       `}
                       title={isCollapsed ? item.name : undefined}
                     >
-                      <Icon className={`
-                        flex-shrink-0 transition-colors duration-200
-                        ${isCollapsed && !isMobileOpen ? 'w-5 h-5' : 'w-5 h-5 mr-3'}
-                        ${isActive ? 'text-gray-900 dark:text-white' : ''}
-                      `} />
+                      <div className="relative flex-shrink-0">
+                        <Icon className={`
+                          transition-colors duration-200
+                          ${isCollapsed && !isMobileOpen ? 'w-5 h-5' : 'w-5 h-5 mr-3'}
+                          ${isActive ? 'text-gray-900 dark:text-white' : ''}
+                        `} />
+                        {hasUnread && (
+                          <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white dark:ring-gray-900"></span>
+                        )}
+                      </div>
                       {(!isCollapsed || isMobileOpen) && (
-                        <span className="truncate">{item.name}</span>
+                        <span className="truncate flex-1">{item.name}</span>
+                      )}
+                      {hasUnread && (!isCollapsed || isMobileOpen) && unreadCount > 0 && (
+                        <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
                       )}
                     </Link>
                   ) : (
@@ -215,17 +248,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         title={isCollapsed ? item.name : undefined}
                       >
                         <div className="flex items-center flex-1">
-                          <Icon className={`
-                            flex-shrink-0 transition-colors duration-200
-                            ${isCollapsed && !isMobileOpen ? 'w-5 h-5' : 'w-5 h-5 mr-3'}
-                            ${isActive ? 'text-gray-900 dark:text-white' : ''}
-                          `} />
+                          <div className="relative flex-shrink-0">
+                            <Icon className={`
+                              transition-colors duration-200
+                              ${isCollapsed && !isMobileOpen ? 'w-5 h-5' : 'w-5 h-5 mr-3'}
+                              ${isActive ? 'text-gray-900 dark:text-white' : ''}
+                            `} />
+                            {hasUnread && (
+                              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white dark:ring-gray-900"></span>
+                            )}
+                          </div>
                           {(!isCollapsed || isMobileOpen) && (
                             <span className="truncate">{item.name}</span>
                           )}
                         </div>
-                        {hasSubItems && (!isCollapsed || isMobileOpen) && (
+                        {hasUnread && (!isCollapsed || isMobileOpen) && unreadCount > 0 && (
+                          <span className="ml-2 bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                          </span>
+                        )}
+                        {hasSubItems && (!isCollapsed || isMobileOpen) && !hasUnread && (
                           <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                        )}
+                        {hasSubItems && (!isCollapsed || isMobileOpen) && hasUnread && (
+                          <ChevronDown className={`w-4 h-4 ml-1 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                         )}
                       </button>
                       

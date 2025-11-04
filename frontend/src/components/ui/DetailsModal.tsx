@@ -8,16 +8,17 @@ import {
   MapPin, 
   Users, 
   Mail, 
-  Phone, 
-  Building, 
-  Award,
   BookOpen,
   GraduationCap,
   Shield,
   UserCheck,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  UserMinus,
+  ExternalLink,
+  Video,
+  FileText
 } from 'lucide-react';
 
 interface DetailsModalProps {
@@ -27,6 +28,9 @@ interface DetailsModalProps {
   type: 'user' | 'event' | 'group';
   onEdit?: () => void;
   onDelete?: () => void;
+  onJoin?: () => void;
+  onLeave?: () => void;
+  isJoined?: boolean;
 }
 
 interface Group {
@@ -49,6 +53,9 @@ export const DetailsModal: React.FC<DetailsModalProps> = ({
   type,
   onEdit,
   onDelete,
+  onJoin,
+  onLeave,
+  isJoined = false,
 }) => {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -71,7 +78,8 @@ export const DetailsModal: React.FC<DetailsModalProps> = ({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'ACTIVE':
-      case 'SCHEDULED':
+      case 'UPCOMING':
+      case 'ONGOING':
       case 'COMPLETED':
         return <CheckCircle className="h-4 w-4 text-green-500" />;
       case 'CANCELLED':
@@ -126,18 +134,6 @@ export const DetailsModal: React.FC<DetailsModalProps> = ({
               <Mail className="h-4 w-4 text-gray-400" />
               <span className="text-gray-600 dark:text-gray-300">{user.email}</span>
             </div>
-            {user.phone && (
-              <div className="flex items-center space-x-2 text-sm">
-                <Phone className="h-4 w-4 text-gray-400" />
-                <span className="text-gray-600 dark:text-gray-300">{user.phone}</span>
-              </div>
-            )}
-            {user.department && (
-              <div className="flex items-center space-x-2 text-sm">
-                <Building className="h-4 w-4 text-gray-400" />
-                <span className="text-gray-600 dark:text-gray-300">{user.department}</span>
-              </div>
-            )}
           </div>
         </div>
 
@@ -150,26 +146,6 @@ export const DetailsModal: React.FC<DetailsModalProps> = ({
                 {formatDate(user.createdAt)}
               </span>
             </div>
-            {user.lastLoginAt && (
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">Last Login:</span>
-                <span className="text-gray-900 dark:text-white">
-                  {formatDate(user.lastLoginAt)}
-                </span>
-              </div>
-            )}
-            {user.role === Role.MENTOR && user.menteeCount && (
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">Mentees:</span>
-                <span className="text-gray-900 dark:text-white">{user.menteeCount}</span>
-              </div>
-            )}
-            {user.role === Role.MENTEE && user.mentorCount && (
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">Mentors:</span>
-                <span className="text-gray-900 dark:text-white">{user.mentorCount}</span>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -184,7 +160,11 @@ export const DetailsModal: React.FC<DetailsModalProps> = ({
     </div>
   );
 
-  const renderEventDetails = (event: Event) => (
+  const renderEventDetails = (event: Event) => {
+    // Type guard to check if event has meetingLink
+    const eventWithLink = event as Event & { meetingLink?: string; isVirtual?: boolean };
+    
+    return (
     <div className="space-y-6">
       {/* Header */}
       <div>
@@ -219,10 +199,57 @@ export const DetailsModal: React.FC<DetailsModalProps> = ({
               </span>
             </div>
             
-            <div className="flex items-center space-x-2 text-sm">
-              <MapPin className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-600 dark:text-gray-300">{event.location}</span>
-            </div>
+            {event.location ? (
+              <div className="flex items-center space-x-2 text-sm">
+                <MapPin className="h-4 w-4 text-gray-400" />
+                <span className="text-gray-600 dark:text-gray-300">{event.location}</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2 text-sm">
+                <Video className="h-4 w-4 text-blue-500" />
+                <span className="text-blue-600 dark:text-blue-400 font-medium">Virtual Event</span>
+              </div>
+            )}
+            
+            {/* Meeting Link - Only show if a valid link exists */}
+            {eventWithLink.meetingLink && 
+             eventWithLink.meetingLink !== 'To be provided' && 
+             eventWithLink.meetingLink.trim() !== '' && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Video className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                      Meeting Link
+                    </span>
+                  </div>
+                  <a
+                    href={eventWithLink.meetingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center space-x-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors"
+                  >
+                    <span>Join Meeting</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              </div>
+            )}
+            
+            {/* Show placeholder message if virtual but no link yet */}
+            {!event.location && 
+             (!eventWithLink.meetingLink || 
+              eventWithLink.meetingLink === 'To be provided' || 
+              eventWithLink.meetingLink.trim() === '') && (
+              <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center space-x-2">
+                  <Video className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    Meeting link will be provided before the event
+                  </span>
+                </div>
+              </div>
+            )}
             
             <div className="flex items-center space-x-2 text-sm">
               <Users className="h-4 w-4 text-gray-400" />
@@ -263,24 +290,67 @@ export const DetailsModal: React.FC<DetailsModalProps> = ({
           </div>
 
           {/* Attendance Progress */}
-          <div>
-            <div className="flex justify-between text-sm mb-1">
-              <span className="text-gray-500 dark:text-gray-400">Attendance</span>
-              <span className="text-gray-900 dark:text-white">
-                {Math.round((event.currentAttendees / event.maxAttendees) * 100)}%
-              </span>
+          {event.currentAttendees !== undefined && event.maxAttendees && (
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-500 dark:text-gray-400">Attendance</span>
+                <span className="text-gray-900 dark:text-white">
+                  {Math.round((event.currentAttendees / event.maxAttendees) * 100)}%
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${(event.currentAttendees / event.maxAttendees) * 100}%` }}
+                />
+              </div>
             </div>
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-              <div 
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${(event.currentAttendees / event.maxAttendees) * 100}%` }}
-              />
-            </div>
-          </div>
+          )}
         </div>
       </div>
+
+      {/* Event Attachments */}
+      {event.attachments && (() => {
+        try {
+          const attachments = JSON.parse(event.attachments);
+          if (attachments && attachments.length > 0) {
+            return (
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Event Attachments
+                </h3>
+                <div className="space-y-2">
+                  {attachments.map((file: { name: string; url: string }, index: number) => (
+                    <a
+                      key={index}
+                      href={file.url}
+                      download={file.name}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors group"
+                    >
+                      <div className="flex items-center space-x-3 flex-1 min-w-0">
+                        <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                        <span className="text-sm font-medium text-blue-900 dark:text-blue-100 truncate">
+                          {file.name}
+                        </span>
+                      </div>
+                      <ExternalLink className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+        } catch (e) {
+          console.error('Failed to parse attachments:', e);
+        }
+        return null;
+      })()}
     </div>
   );
+  };
 
   const renderGroupDetails = (group: Group) => (
     <div className="space-y-6">
@@ -405,24 +475,50 @@ export const DetailsModal: React.FC<DetailsModalProps> = ({
         {renderContent()}
         
         {/* Action Buttons */}
-        {(onEdit || onDelete) && (
-          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-            {onEdit && (
-              <Button variant="outline" onClick={onEdit}>
-                Edit {type}
-              </Button>
-            )}
-            {onDelete && (
-              <Button 
-                variant="outline" 
-                onClick={onDelete}
-                className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
-              >
-                Delete {type}
-              </Button>
-            )}
-          </div>
-        )}
+        <div className="flex justify-between items-center pt-6 border-t border-gray-200 dark:border-gray-700">
+          {/* Left side: Join/Leave buttons for events */}
+          {type === 'event' && (data as Event).status === 'UPCOMING' && (onJoin || onLeave) && (
+            <div className="flex gap-3">
+              {isJoined ? (
+                <Button
+                  onClick={onLeave}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  <UserMinus className="w-4 h-4 mr-2" />
+                  Leave Event
+                </Button>
+              ) : (
+                <Button
+                  onClick={onJoin}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <UserCheck className="w-4 h-4 mr-2" />
+                  Join Event
+                </Button>
+              )}
+            </div>
+          )}
+          
+          {/* Right side: Edit/Delete buttons */}
+          {(onEdit || onDelete) && (
+            <div className="flex space-x-3 ml-auto">
+              {onEdit && (
+                <Button variant="outline" onClick={onEdit}>
+                  Edit {type}
+                </Button>
+              )}
+              {onDelete && (
+                <Button 
+                  variant="outline" 
+                  onClick={onDelete}
+                  className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
+                >
+                  Delete {type}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </Modal>
   );

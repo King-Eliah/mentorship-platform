@@ -18,15 +18,19 @@ export enum InviteCodeType {
 }
 
 export enum EventStatus {
-  SCHEDULED = 'SCHEDULED',
+  UPCOMING = 'UPCOMING',
+  ONGOING = 'ONGOING',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED'
 }
 
 export enum EventType {
-  WORKSHOP = 'workshop',
-  SESSION = 'session',
-  GROUP_SESSION = 'group_session'
+  WORKSHOP = 'WORKSHOP',
+  WEBINAR = 'WEBINAR',
+  NETWORKING = 'NETWORKING',
+  MENTORING_SESSION = 'MENTORING_SESSION',
+  SOCIAL = 'SOCIAL',
+  OTHER = 'OTHER'
 }
 
 export enum GroupStatus {
@@ -80,6 +84,8 @@ export interface Event {
   scheduledAt: string;
   duration: number;
   location?: string;
+  isVirtual?: boolean;
+  meetingLink?: string;
   maxAttendees?: number;
   currentAttendees?: number;
   type: EventType;
@@ -88,6 +94,7 @@ export interface Event {
   organizer?: User;
   groupId?: string;
   attendees?: User[];
+  attachments?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -99,29 +106,15 @@ export interface MentorGroup {
   mentorId: string;
   mentor?: User;
   mentorName?: string;
+  menteeIds: string[]; // Array of mentee IDs
   maxMembers: number;
   isActive: boolean;
   status?: string;
-  members?: User[];
-  menteeIds?: string[];
-  mentees?: User[];
+  members?: User[]; // Array of mentee User objects
+  mentees?: User[]; // Alias for members
   sharedSkills?: string[];
   createdAt: string;
   updatedAt: string;
-}
-
-export interface CreateGroupRequest {
-  name: string;
-  description?: string;
-  mentorId: string;
-  menteeIds: string[];
-  maxMembers?: number;
-}
-
-export interface CreateGroupsRandomRequest {
-  menteesPerMentor: number;
-  mentorIds?: string[]; // Optional: specify which mentors, or use all available
-  menteeIds?: string[]; // Optional: specify which mentees, or use all available
 }
 
 export interface Message {
@@ -192,6 +185,7 @@ export * from './goals';
 export * from './skills';
 export * from './learning';
 export * from './activities';
+export * from './messaging';
 
 // Resolve naming conflicts
 export type { ActivityFilters as LearningActivityFilters } from './learning';
@@ -231,4 +225,18 @@ export interface AdminApprovalRequest {
   action: 'approve' | 'reject';
   assignedRole?: Role;
   rejectionReason?: string;
+}
+
+export interface CreateGroupRequest {
+  name: string;
+  description?: string;
+  mentorId: string;
+  menteeIds: string[];
+  maxMembers?: number;
+}
+
+export interface CreateGroupsRandomRequest {
+  menteesPerMentor: number;
+  mentorIds?: string[];
+  menteeIds?: string[];
 }

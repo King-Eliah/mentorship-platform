@@ -25,7 +25,7 @@ const routes: RouteConfig[] = [
   { path: '/resources', label: 'Resource Manager', parent: '/dashboard' },
   { path: '/analytics', label: 'Analytics Dashboard', parent: '/dashboard', roles: [Role.ADMIN, Role.MENTOR] },
   { path: '/mentor-analytics', label: 'Mentor Analytics', parent: '/dashboard', roles: [Role.ADMIN, Role.MENTOR] },
-  { path: '/notifications', label: 'Notifications', parent: '/dashboard' },
+  { path: '/activities', label: 'Activity & Notifications', parent: '/dashboard' },
   { path: '/session-logs', label: 'Session Logs', parent: '/dashboard', roles: [Role.ADMIN, Role.MENTOR] },
   { path: '/incident-report', label: 'Incident Report', parent: '/dashboard', roles: [Role.ADMIN] },
   { path: '/policies', label: 'Program Policies', parent: '/dashboard' },

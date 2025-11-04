@@ -46,7 +46,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         setLoading(true);
         
-        // Check if user is stored in localStorage
+        // Check if we have a token first
+        const token = localStorage.getItem('mentorship_token');
+        if (!token) {
+          setIsAuthenticated(false);
+          setLoading(false);
+          return;
+        }
+        
+        // Try to get current user
         const currentUser = await authService.getCurrentUser();
         if (currentUser) {
           setUser(currentUser);
@@ -55,8 +63,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsAuthenticated(false);
         }
       } catch (error) {
-        console.error('Error initializing auth:', error);
+        // Only log error if it's not a "No token" error
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (!errorMessage.includes('No token') && !errorMessage.includes('401')) {
+          console.error('Error initializing auth:', error);
+        }
         setIsAuthenticated(false);
+        // Clear invalid token
+        localStorage.removeItem('mentorship_token');
       } finally {
         setLoading(false);
       }

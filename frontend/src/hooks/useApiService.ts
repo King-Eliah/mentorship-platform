@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { APIError, apiUtils } from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -14,7 +14,7 @@ export interface UseApiServiceResult<T> {
   data: T | null;
   loading: boolean;
   error: APIError | null;
-  execute: (...args: any[]) => Promise<T | null>;
+  execute: (...args: unknown[]) => Promise<T | null>;
   reset: () => void;
   retry: () => void;
 }
@@ -24,29 +24,22 @@ export interface UseApiServiceResult<T> {
  * This replaces direct mock API usage throughout the application
  */
 export function useApiService<T>(
-  apiFunction: (...args: any[]) => Promise<T>,
+  apiFunction: (...args: unknown[]) => Promise<T>,
   options: UseApiServiceOptions = {}
 ): UseApiServiceResult<T> {
   const {
     showErrorToast = true,
     showSuccessToast = false,
     retryable = true,
-    loadingInitial = false,
-    enabled = true
+    loadingInitial = false
   } = options;
 
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(loadingInitial);
   const [error, setError] = useState<APIError | null>(null);
-  const [lastArgs, setLastArgs] = useState<any[]>([]);
+  const [lastArgs, setLastArgs] = useState<unknown[]>([]);
 
-  useEffect(() => {
-    if (enabled && loadingInitial) {
-      execute();
-    }
-  }, [enabled]);
-
-  const execute = useCallback(async (...args: any[]): Promise<T | null> => {
+  const execute = useCallback(async (...args: unknown[]): Promise<T | null> => {
     setLoading(true);
     setError(null);
     setLastArgs(args);
@@ -61,7 +54,7 @@ export function useApiService<T>(
       
       return result;
     } catch (err) {
-      const apiError = err instanceof APIError ? err : new APIError(0, apiUtils.getErrorMessage(err));
+      const apiError = apiUtils.formatError(err);
       setError(apiError);
       
       if (showErrorToast) {
@@ -128,7 +121,7 @@ export interface UsePaginatedApiResult<T> extends Omit<UseApiServiceResult<Pagin
 }
 
 export function usePaginatedApi<T>(
-  apiFunction: (page: number, size: number, ...args: any[]) => Promise<PaginatedResponse<T>>,
+  apiFunction: (page: number, size: number, ...args: unknown[]) => Promise<PaginatedResponse<T>>,
   options: UsePaginatedApiOptions = {}
 ): UsePaginatedApiResult<T> {
   const { initialPage = 0, initialSize = 20, ...restOptions } = options;
@@ -136,7 +129,10 @@ export function usePaginatedApi<T>(
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [pageSize, setPageSize] = useState(initialSize);
   
-  const baseApi = useApiService(apiFunction, restOptions);
+  const baseApi = useApiService(
+    apiFunction as (...args: unknown[]) => Promise<PaginatedResponse<T>>,
+    restOptions
+  );
 
   const loadPage = useCallback(async (page: number, size?: number): Promise<PaginatedResponse<T> | null> => {
     const effectiveSize = size || pageSize;
@@ -144,7 +140,8 @@ export function usePaginatedApi<T>(
     if (size) setPageSize(size);
     
     return baseApi.execute(page, effectiveSize);
-  }, [baseApi.execute, pageSize]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageSize]);
 
   const loadMore = useCallback(async (): Promise<PaginatedResponse<T> | null> => {
     return loadPage(currentPage + 1);
@@ -172,21 +169,24 @@ export function usePaginatedApi<T>(
  * Hook for mutation operations (POST, PUT, DELETE)
  */
 export interface UseMutationOptions extends UseApiServiceOptions {
-  onSuccess?: (data: any) => void;
+  onSuccess?: (data: unknown) => void;
   onError?: (error: APIError) => void;
   invalidateQueries?: string[];
 }
 
-export function useMutation<T, TArgs extends any[]>(
+export function useMutation<T, TArgs extends unknown[]>(
   mutationFunction: (...args: TArgs) => Promise<T>,
   options: UseMutationOptions = {}
 ): UseApiServiceResult<T> & { mutate: (...args: TArgs) => Promise<T | null> } {
   const { onSuccess, onError, invalidateQueries, ...restOptions } = options;
   
-  const baseApi = useApiService(mutationFunction, {
-    ...restOptions,
-    showSuccessToast: restOptions.showSuccessToast ?? true
-  });
+  const baseApi = useApiService(
+    mutationFunction as (...args: unknown[]) => Promise<T>,
+    {
+      ...restOptions,
+      showSuccessToast: restOptions.showSuccessToast ?? true
+    }
+  );
 
   const mutate = useCallback(async (...args: TArgs): Promise<T | null> => {
     const result = await baseApi.execute(...args);
@@ -204,7 +204,8 @@ export function useMutation<T, TArgs extends any[]>(
     }
     
     return result;
-  }, [baseApi.execute, baseApi.error, onSuccess, onError, invalidateQueries]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onSuccess, onError, invalidateQueries]);
 
   return {
     ...baseApi,

@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
   Search, 
@@ -10,29 +12,30 @@ import {
   CheckCircle,
   Clock,
   Ban,
-  Crown,
   GraduationCap,
   User as UserIcon,
   Grid3X3,
   List,
   X,
   Save,
-  ChevronUp,
-  ChevronDown,
   XCircle,
-  Trash2
+  Trash2,
+  RefreshCw
 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { DropdownSelect } from '../components/ui/DropdownSelect';
-import { ActionDropdown, createViewAction, createEditAction, createDeleteAction } from '../components/ui/ActionDropdown';
+import { ActionDropdown, createViewAction, createEditAction, createDeleteAction, createMessageAction } from '../components/ui/ActionDropdown';
 import { DetailsModal } from '../components/ui/DetailsModal';
 import { ConfirmModal } from '../components/ui/Modal';
 import { User, Role, UserStatus } from '../types';
+import { userService } from '../services/userService';
 import toast from 'react-hot-toast';
 
 export default function UsersManagement() {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -46,97 +49,13 @@ export default function UsersManagement() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: '1',
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john.doe@example.com',
-      role: Role.MENTOR,
-      status: UserStatus.ACTIVE,
-      isActive: true,
-      createdAt: '2024-01-15T10:00:00Z',
-      updatedAt: '2024-09-26T14:30:00Z'
-    },
-    {
-      id: '2',
-      firstName: 'Jane',
-      lastName: 'Smith',
-      email: 'jane.smith@example.com',
-      role: Role.MENTEE,
-      status: UserStatus.ACTIVE,
-      isActive: true,
-      createdAt: '2024-02-20T09:15:00Z',
-      updatedAt: '2024-09-25T16:45:00Z'
-    },
-    {
-      id: '3',
-      firstName: 'Mike',
-      lastName: 'Johnson',
-      email: 'mike.johnson@example.com',
-      role: Role.ADMIN,
-      status: UserStatus.ACTIVE,
-      isActive: true,
-      createdAt: '2023-12-01T08:00:00Z',
-      updatedAt: '2024-09-27T09:00:00Z'
-    },
-    {
-      id: '4',
-      firstName: 'Sarah',
-      lastName: 'Wilson',
-      email: 'sarah.wilson@example.com',
-      role: Role.MENTOR,
-      status: UserStatus.SUSPENDED,
-      isActive: false,
-      createdAt: '2024-03-10T11:20:00Z',
-      updatedAt: '2024-07-15T12:00:00Z'
-    },
-    {
-      id: '5',
-      firstName: 'Tom',
-      lastName: 'Brown',
-      email: 'tom.brown@example.com',
-      role: Role.MENTEE,
-      status: UserStatus.SUSPENDED,
-      isActive: false,
-      createdAt: '2024-04-05T13:45:00Z',
-      updatedAt: '2024-08-15T10:20:00Z'
-    },
-    {
-      id: '6',
-      firstName: 'Emily',
-      lastName: 'Davis',
-      email: 'emily.davis@example.com',
-      role: Role.MENTEE,
-      status: UserStatus.ACTIVE,
-      isActive: true,
-      createdAt: '2024-05-12T14:30:00Z',
-      updatedAt: '2024-09-24T11:15:00Z'
-    },
-    {
-      id: '7',
-      firstName: 'David',
-      lastName: 'Lee',
-      email: 'david.lee@example.com',
-      role: Role.MENTOR,
-      status: UserStatus.ACTIVE,
-      isActive: true,
-      createdAt: '2024-01-22T16:45:00Z',
-      updatedAt: '2024-09-26T08:20:00Z'
-    },
-    {
-      id: '8',
-      firstName: 'Lisa',
-      lastName: 'Garcia',
-      email: 'lisa.garcia@example.com',
-      role: Role.MENTEE,
-      status: UserStatus.ACTIVE,
-      isActive: true,
-      createdAt: '2024-06-18T12:00:00Z',
-      updatedAt: '2024-09-23T15:30:00Z'
-    }
-  ]);
+
+  // Fetch users from backend
+  const { data: users = [], refetch } = useQuery({
+    queryKey: ['users-management'],
+    queryFn: () => userService.getAllUsers(),
+    refetchInterval: 5000, // Auto-refetch every 5 seconds
+  });
 
   // Filtering and sorting logic
   const filteredUsers = useMemo(() => {
@@ -171,19 +90,6 @@ export default function UsersManagement() {
   }, [filteredUsers, sortBy]);
 
   // Helper functions
-  const getRoleIcon = (role: string) => {
-    switch (role) {
-      case 'ADMIN':
-        return <Crown className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />;
-      case 'MENTOR':
-        return <GraduationCap className="w-4 h-4 text-blue-600 dark:text-blue-400" />;
-      case 'MENTEE':
-        return <UserIcon className="w-4 h-4 text-green-600 dark:text-green-400" />;
-      default:
-        return <UserIcon className="w-4 h-4 text-gray-600 dark:text-gray-400" />;
-    }
-  };
-
   const getRoleColor = (role: string) => {
     switch (role) {
       case 'ADMIN':
@@ -194,19 +100,6 @@ export default function UsersManagement() {
         return 'text-green-600 bg-green-50 dark:bg-green-900/20 dark:text-green-400';
       default:
         return 'text-gray-600 bg-gray-50 dark:bg-gray-900/20 dark:text-gray-400';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'ACTIVE':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'INACTIVE':
-        return <Clock className="w-4 h-4 text-yellow-500" />;
-      case 'SUSPENDED':
-        return <Ban className="w-4 h-4 text-red-500" />;
-      default:
-        return <Clock className="w-4 h-4 text-gray-500" />;
     }
   };
 
@@ -237,38 +130,57 @@ export default function UsersManagement() {
     setShowDetailsModal(true);
   };
 
+  const handleMessageUser = (user: User) => {
+    navigate(`/messages?userId=${user.id}`);
+  };
+
   const handleDeleteConfirm = async () => {
     if (selectedUser) {
       try {
-        // Remove user from the list
-        setUsers(users.filter(u => u.id !== selectedUser.id));
-        // Show success toast
-        toast.success(`User ${selectedUser.firstName} ${selectedUser.lastName} has been deleted successfully.`);
-        // Close modal and deselect
+        await userService.deleteUser(selectedUser.id);
+        queryClient.invalidateQueries({ queryKey: ['users-management'] });
+        queryClient.invalidateQueries({ queryKey: ['all-users'] });
+        toast.success(`User ${selectedUser.firstName} ${selectedUser.lastName} has been deleted.`);
         setSelectedUser(null);
         setShowDeleteConfirm(false);
-      } catch (error) {
-        console.error('Failed to delete user:', error);
-        toast.error('Failed to delete user. Please try again.');
+      } catch {
+        toast.error('Failed to delete user');
       }
     }
   };
 
-  const handleAddUser = (newUser: Omit<User, 'id' | 'createdAt'>) => {
-    const user: User = {
-      ...newUser,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString()
-    };
-    setUsers([...users, user]);
-    toast.success('User added successfully');
-    setShowAddUserModal(false);
+  const handleAddUser = async (data: Partial<User>) => {
+    try {
+      const result = await userService.createUserManually({
+        firstName: data.firstName || '',
+        lastName: data.lastName || '',
+        email: data.email || '',
+        role: data.role || 'MENTEE',
+        status: data.status || 'ACTIVE'
+      });
+
+      toast.success('User created successfully!');
+      toast(() => (
+        <div className="flex flex-col space-y-2">
+          <p className="font-semibold">Generated Password:</p>
+          <code className="bg-gray-100 p-2 rounded text-sm">{result.generatedPassword}</code>
+          <p className="text-xs text-gray-600">User must change this password on first login</p>
+        </div>
+      ), { duration: 10000 });
+
+      queryClient.invalidateQueries({ queryKey: ['users-management'] });
+      setShowAddUserModal(false);
+    } catch (error: unknown) {
+      const errorResponse = (error as Record<string, unknown>)?.response as Record<string, unknown>;
+      const message = errorResponse?.data as Record<string, unknown>;
+      toast.error((message?.message as string) || 'Failed to create user');
+    }
   };
 
-  const handleEditUser = (updatedUser: User) => {
-    setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
-    toast.success('User updated successfully');
-    setEditingUser(null);
+  const handleRefresh = async () => {
+    toast.loading('Refreshing...', { id: 'refresh' });
+    await refetch();
+    toast.success('Users refreshed!', { id: 'refresh' });
   };
 
   const stats = {
@@ -283,23 +195,48 @@ export default function UsersManagement() {
 
   // AddUserModal Component
   const AddUserModal = () => {
-    const [formData, setFormData] = useState({
-      firstName: '',
-      lastName: '',
-      email: '',
-      role: Role.MENTEE,
-      status: UserStatus.ACTIVE,
-      isActive: true,
-      updatedAt: new Date().toISOString()
-    });
+    // Initialize form with editing user values if provided. AddUserModal is mounted
+    // only when `showAddUserModal` is true so this initializer runs at mount time.
+    const [formData, setFormData] = useState(() => ({
+      firstName: editingUser?.firstName || '',
+      lastName: editingUser?.lastName || '',
+      email: editingUser?.email || '',
+      role: (editingUser?.role as Role) || Role.MENTEE,
+      status: (editingUser?.status as UserStatus) || UserStatus.ACTIVE,
+      isActive: editingUser?.isActive ?? true,
+      updatedAt: editingUser?.updatedAt || new Date().toISOString()
+    }));
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!formData.firstName || !formData.lastName || !formData.email) {
         toast.error('Please fill in required fields');
         return;
       }
-      handleAddUser(formData);
+
+      // If editingUser is present, update the user instead of creating
+      if (editingUser) {
+        try {
+          await userService.updateProfile(editingUser.id, {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            role: formData.role,
+            status: formData.status
+          });
+          toast.success('User updated successfully');
+          queryClient.invalidateQueries({ queryKey: ['users-management'] });
+          setShowAddUserModal(false);
+          setEditingUser(null);
+        } catch (_err) {
+          console.error(_err);
+          toast.error('Failed to update user');
+        }
+      } else {
+        handleAddUser(formData);
+      }
+
+      // reset form
       setFormData({
         firstName: '',
         lastName: '',
@@ -410,195 +347,201 @@ export default function UsersManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+        {/* Header - Mobile Responsive */}
+        <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-3 sm:gap-4 mb-6 sm:mb-8">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-1 sm:mb-2">
               User Management
             </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Manage users, roles, and permissions across the platform
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 truncate">
+              Manage users • Auto-refresh every 5s
             </p>
           </div>
-          <div className="flex items-center space-x-3 mt-4 sm:mt-0">
+          <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+            <Button
+              onClick={handleRefresh}
+              variant="ghost"
+              size="sm"
+              className="text-gray-600 dark:text-gray-400 p-2"
+              title="Refresh"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </Button>
             <Button
               onClick={() => setViewMode(viewMode === 'cards' ? 'table' : 'cards')}
               variant="ghost"
               size="sm"
-              className="text-gray-600 dark:text-gray-400"
+              className="text-gray-600 dark:text-gray-400 p-2"
+              title={viewMode === 'cards' ? 'Table View' : 'Card View'}
             >
               {viewMode === 'cards' ? (
-                <>
-                  <List className="w-4 h-4 mr-2" />
-                  Table View
-                </>
+                <List className="w-4 h-4" />
               ) : (
-                <>
-                  <Grid3X3 className="w-4 h-4 mr-2" />
-                  Card View
-                </>
+                <Grid3X3 className="w-4 h-4" />
               )}
             </Button>
             <Button 
               onClick={() => setShowAddUserModal(true)}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white w-full xs:w-auto text-sm"
             >
-              <UserPlus className="w-4 h-4 mr-2" />
-              Add User
+              <UserPlus className="w-3 sm:w-4 h-3 sm:h-4 mr-1 sm:mr-2" />
+              <span className="hidden xs:inline">Add User</span>
+              <span className="xs:hidden">Add</span>
             </Button>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-800">
-            <div className="flex items-center">
-              <div className="p-3 bg-blue-600 rounded-lg mr-4">
-                <Users className="w-6 h-6 text-white" />
+        {/* Stats Cards - Mobile Responsive */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-4 md:gap-6 mb-4 sm:mb-6 md:mb-8">
+          <Card className="p-3 sm:p-4 md:p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-800">
+            <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+              <div className="p-2 sm:p-3 bg-blue-600 rounded-lg flex-shrink-0">
+                <Users className="w-4 sm:w-6 h-4 sm:h-6 text-white" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Total Users</p>
-                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{stats.total}</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-800">
-            <div className="flex items-center">
-              <div className="p-3 bg-green-600 rounded-lg mr-4">
-                <CheckCircle className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-green-600 dark:text-green-400">Active Users</p>
-                <p className="text-2xl font-bold text-green-900 dark:text-green-100">{stats.active}</p>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400 truncate">Total</p>
+                <p className="text-lg sm:text-2xl font-bold text-blue-900 dark:text-blue-100">{stats.total}</p>
               </div>
             </div>
           </Card>
 
-          <Card className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-200 dark:border-purple-800">
-            <div className="flex items-center">
-              <div className="p-3 bg-purple-600 rounded-lg mr-4">
-                <GraduationCap className="w-6 h-6 text-white" />
+          <Card className="p-3 sm:p-4 md:p-6 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-800">
+            <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+              <div className="p-2 sm:p-3 bg-green-600 rounded-lg flex-shrink-0">
+                <CheckCircle className="w-4 sm:w-6 h-4 sm:h-6 text-white" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-purple-600 dark:text-purple-400">Mentors</p>
-                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{stats.mentors}</p>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-green-600 dark:text-green-400 truncate">Active</p>
+                <p className="text-lg sm:text-2xl font-bold text-green-900 dark:text-green-100">{stats.active}</p>
               </div>
             </div>
           </Card>
 
-          <Card className="p-6 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border-orange-200 dark:border-orange-800">
-            <div className="flex items-center">
-              <div className="p-3 bg-orange-600 rounded-lg mr-4">
-                <UserIcon className="w-6 h-6 text-white" />
+          <Card className="p-3 sm:p-4 md:p-6 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-200 dark:border-purple-800">
+            <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+              <div className="p-2 sm:p-3 bg-purple-600 rounded-lg flex-shrink-0">
+                <GraduationCap className="w-4 sm:w-6 h-4 sm:h-6 text-white" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-orange-600 dark:text-orange-400">Mentees</p>
-                <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">{stats.mentees}</p>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-purple-600 dark:text-purple-400 truncate">Mentors</p>
+                <p className="text-lg sm:text-2xl font-bold text-purple-900 dark:text-purple-100">{stats.mentors}</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-3 sm:p-4 md:p-6 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border-orange-200 dark:border-orange-800 col-span-2 sm:col-span-1">
+            <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+              <div className="p-2 sm:p-3 bg-orange-600 rounded-lg flex-shrink-0">
+                <UserIcon className="w-4 sm:w-6 h-4 sm:h-6 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-orange-600 dark:text-orange-400 truncate">Mentees</p>
+                <p className="text-lg sm:text-2xl font-bold text-orange-900 dark:text-orange-100">{stats.mentees}</p>
               </div>
             </div>
           </Card>
         </div>
 
-        {/* Filters */}
-        <Card className="p-6 mb-6 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Filters - Mobile Responsive */}
+        <Card className="p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
             <div className="relative flex items-center">
               <Search className="absolute left-3 text-gray-400 dark:text-gray-500 w-4 h-4" />
               <input
                 type="text"
-                placeholder="Search users..."
+                placeholder="Search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full pl-10 pr-3 py-2 text-xs sm:text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
               />
             </div>
 
             <DropdownSelect
-              placeholder="Filter by role"
+              placeholder="Role"
               value={roleFilter}
               onChange={(value) => setRoleFilter(value)}
               options={[
-                { value: 'ALL', label: 'All Roles', icon: <Users className="w-4 h-4" />, description: 'Show all user roles' },
-                { value: Role.ADMIN, label: 'Admin', icon: <Shield className="w-4 h-4" />, description: 'System administrators' },
-                { value: Role.MENTOR, label: 'Mentor', icon: <UserCheck className="w-4 h-4" />, description: 'Guidance providers' },
-                { value: Role.MENTEE, label: 'Mentee', icon: <UserIcon className="w-4 h-4" />, description: 'Learning participants' }
+                { value: 'ALL', label: 'All Roles', icon: <Users className="w-4 h-4" /> },
+                { value: Role.ADMIN, label: 'Admin', icon: <Shield className="w-4 h-4" /> },
+                { value: Role.MENTOR, label: 'Mentor', icon: <UserCheck className="w-4 h-4" /> },
+                { value: Role.MENTEE, label: 'Mentee', icon: <UserIcon className="w-4 h-4" /> }
               ]}
             />
 
             <DropdownSelect
-              placeholder="Filter by status"
+              placeholder="Status"
               value={statusFilter}
               onChange={(value) => setStatusFilter(value)}
               options={[
-                { value: 'ALL', label: 'All Status', icon: <Grid3X3 className="w-4 h-4" />, description: 'Show all statuses' },
-                { value: UserStatus.ACTIVE, label: 'Active', icon: <CheckCircle className="w-4 h-4" />, description: 'Active accounts' },
-                { value: UserStatus.PENDING, label: 'Pending', icon: <Clock className="w-4 h-4" />, description: 'Pending approval' },
-                { value: UserStatus.SUSPENDED, label: 'Suspended', icon: <XCircle className="w-4 h-4" />, description: 'Suspended accounts' },
-                { value: UserStatus.REJECTED, label: 'Rejected', icon: <Ban className="w-4 h-4" />, description: 'Rejected accounts' }
+                { value: 'ALL', label: 'All Status', icon: <Grid3X3 className="w-4 h-4" /> },
+                { value: UserStatus.ACTIVE, label: 'Active', icon: <CheckCircle className="w-4 h-4" /> },
+                { value: UserStatus.PENDING, label: 'Pending', icon: <Clock className="w-4 h-4" /> },
+                { value: UserStatus.SUSPENDED, label: 'Suspended', icon: <XCircle className="w-4 h-4" /> },
+                { value: UserStatus.REJECTED, label: 'Rejected', icon: <Ban className="w-4 h-4" /> }
               ]}
             />
 
             <DropdownSelect
-              placeholder="Sort users"
+              placeholder="Sort"
               value={sortBy}
               onChange={(value) => setSortBy(value)}
               options={[
-                { value: 'name', label: 'Sort by Name', icon: <UserIcon className="w-4 h-4" />, description: 'Order alphabetically by name' },
-                { value: 'email', label: 'Sort by Email', icon: <Mail className="w-4 h-4" />, description: 'Order by email address' },
-                { value: 'role', label: 'Sort by Role', icon: <Shield className="w-4 h-4" />, description: 'Group by user role' },
-                { value: 'created', label: 'Sort by Created', icon: <Calendar className="w-4 h-4" />, description: 'Order by creation date' }
+                { value: 'name', label: 'By Name', icon: <UserIcon className="w-4 h-4" /> },
+                { value: 'email', label: 'By Email', icon: <Mail className="w-4 h-4" /> },
+                { value: 'role', label: 'By Role', icon: <Shield className="w-4 h-4" /> },
+                { value: 'created', label: 'By Date', icon: <Calendar className="w-4 h-4" /> }
               ]}
             />
           </div>
         </Card>
 
-        {/* Users Display */}
+        {/* Users Display - Mobile Responsive */}
         {viewMode === 'cards' ? (
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             {sortedUsers.map((user) => (
               <Card key={user.id} className="overflow-visible hover:shadow-lg transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    {/* User Info - Compact */}
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="flex-shrink-0">
-                        <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex items-start justify-between gap-2 sm:gap-4">
+                    {/* User Info - Mobile Optimized */}
+                    <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
+                      <div className="flex-shrink-0 mt-0.5">
+                        <div className="w-10 sm:w-12 h-10 sm:h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm sm:text-base">
                           {user.firstName.charAt(0)}{user.lastName.charAt(0)}
                         </div>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                        <div className="flex items-center gap-1 sm:gap-2 mb-1 flex-wrap">
+                          <h3 className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white truncate">
                             {user.firstName} {user.lastName}
                           </h3>
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${getRoleColor(user.role)}`}>
+                          <span className={`px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${getRoleColor(user.role)}`}>
                             {user.role}
                           </span>
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(user.status)}`}>
+                          <span className={`px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${getStatusColor(user.status)}`}>
                             {user.status}
                           </span>
                         </div>
-                        <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400">
+                        <div className="flex flex-col xs:flex-row xs:items-center gap-1 xs:gap-2 text-xs text-gray-600 dark:text-gray-400">
                           <span className="flex items-center truncate">
                             <Mail className="w-3 h-3 mr-1 flex-shrink-0" />
-                            {user.email}
+                            <span className="truncate">{user.email}</span>
                           </span>
-                          <span className="flex items-center flex-shrink-0">
+                          <span className="hidden xs:flex items-center flex-shrink-0">
                             <Calendar className="w-3 h-3 mr-1" />
-                            Joined {formatDate(user.createdAt)}
+                            {formatDate(user.createdAt)}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Actions - Compact */}
-                    <div className="relative flex gap-2 flex-shrink-0 z-10" onClick={(e) => e.stopPropagation()}>
+                    {/* Actions - Mobile Friendly */}
+                    <div className="relative flex-shrink-0 z-10" onClick={(e) => e.stopPropagation()}>
                       <ActionDropdown
                         actions={[
                           createViewAction(() => handleViewUser(user)),
+                          createMessageAction(() => handleMessageUser(user)),
                           createEditAction(() => {
                             setEditingUser(user);
                             setShowAddUserModal(true);
@@ -617,13 +560,13 @@ export default function UsersManagement() {
             ))}
           </div>
         ) : (
-          // Table View
+          // Table View - Mobile Scrollable
           <Card className="overflow-hidden bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full text-sm">
                 <thead className="bg-gray-50 dark:bg-gray-700">
-                  <tr>
-                    <th className="px-6 py-3 text-left">
+                  <tr className="text-xs sm:text-sm">
+                    <th className="px-3 sm:px-6 py-3 text-left">
                       <input
                         type="checkbox"
                         className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:focus:ring-blue-600"
@@ -637,46 +580,27 @@ export default function UsersManagement() {
                         }}
                       />
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-100" onClick={() => setSortBy(sortBy === 'name' ? 'nameDesc' : 'name')}>
-                      <div className="flex items-center space-x-1">
-                        <span>User</span>
-                        {sortBy === 'name' && <ChevronUp className="w-4 h-4" />}
-                        {sortBy === 'nameDesc' && <ChevronDown className="w-4 h-4" />}
-                      </div>
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      User
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-100" onClick={() => setSortBy(sortBy === 'role' ? 'roleDesc' : 'role')}>
-                      <div className="flex items-center space-x-1">
-                        <span>Role</span>
-                        {sortBy === 'role' && <ChevronUp className="w-4 h-4" />}
-                        {sortBy === 'roleDesc' && <ChevronDown className="w-4 h-4" />}
-                      </div>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Role
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-100" onClick={() => setSortBy(sortBy === 'status' ? 'statusDesc' : 'status')}>
-                      <div className="flex items-center space-x-1">
-                        <span>Status</span>
-                        {sortBy === 'status' && <ChevronUp className="w-4 h-4" />}
-                        {sortBy === 'statusDesc' && <ChevronDown className="w-4 h-4" />}
-                      </div>
+                    <th className="hidden md:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-100" onClick={() => setSortBy(sortBy === 'joinDate' ? 'joinDateDesc' : 'joinDate')}>
-                      <div className="flex items-center space-x-1">
-                        <span>Join Date</span>
-                        {sortBy === 'joinDate' && <ChevronUp className="w-4 h-4" />}
-                        {sortBy === 'joinDateDesc' && <ChevronDown className="w-4 h-4" />}
-                      </div>
+                    <th className="hidden lg:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Joined
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      Activity
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {sortedUsers.map((user) => (
-                    <tr key={user.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${selectedUsers.has(user.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
-                      <td className="px-6 py-4">
+                    <tr key={user.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700 text-xs sm:text-sm ${selectedUsers.has(user.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                      <td className="px-3 sm:px-6 py-4">
                         <input
                           type="checkbox"
                           className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:focus:ring-blue-600"
@@ -692,62 +616,49 @@ export default function UsersManagement() {
                           }}
                         />
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4">
                         <div className="flex items-center">
                           <div className="flex-shrink-0">
-                            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                            <div className="w-8 sm:w-10 h-8 sm:h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-xs sm:text-sm">
                               {user.firstName.charAt(0)}{user.lastName.charAt(0)}
                             </div>
                           </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">{user.firstName} {user.lastName}</div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">{user.email}</div>
+                          <div className="ml-2 sm:ml-4">
+                            <div className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white truncate">{user.firstName} {user.lastName}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      <td className="hidden sm:table-cell px-3 sm:px-6 py-3 sm:py-4">
+                        <span className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-xs font-medium ${
                           user.role === 'ADMIN' 
                             ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' 
                             : user.role === 'MENTOR'
                             ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
                             : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                         }`}>
-                          <Shield className="w-3 h-3 mr-1" />
+                          <Shield className="w-3 h-3 mr-1 flex-shrink-0" />
                           {user.role}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      <td className="hidden md:table-cell px-3 sm:px-6 py-3 sm:py-4">
+                        <span className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-xs font-medium ${
                           user.status === UserStatus.ACTIVE
                             ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                             : user.status === UserStatus.SUSPENDED
                             ? 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
                             : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                         }`}>
-                          {user.status === UserStatus.ACTIVE && <CheckCircle className="w-3 h-3 mr-1" />}
-                          {user.status === UserStatus.SUSPENDED && <XCircle className="w-3 h-3 mr-1" />}
-                          {(user.status === UserStatus.PENDING || user.status === UserStatus.REJECTED) && <Ban className="w-3 h-3 mr-1" />}
+                          {user.status === UserStatus.ACTIVE && <CheckCircle className="w-3 h-3 mr-1 flex-shrink-0" />}
+                          {user.status === UserStatus.SUSPENDED && <XCircle className="w-3 h-3 mr-1 flex-shrink-0" />}
+                          {(user.status === UserStatus.PENDING || user.status === UserStatus.REJECTED) && <Ban className="w-3 h-3 mr-1 flex-shrink-0" />}
                           {user.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                      <td className="hidden lg:table-cell px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                         {new Date(user.createdAt).toLocaleDateString()}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900 dark:text-white">
-                          {user.role === Role.MENTOR && (
-                            <span>Mentor</span>
-                          )}
-                          {user.role === Role.MENTEE && (
-                            <span>Mentee</span>
-                          )}
-                          {user.role === Role.ADMIN && (
-                            <span>System Admin</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm font-medium">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium">
                         <ActionDropdown
                           actions={[
                             createViewAction(() => handleViewUser(user)),
@@ -856,7 +767,7 @@ export default function UsersManagement() {
             setShowDetailsModal(false);
             setSelectedUser(null);
           }}
-          data={selectedUser as any}
+          data={selectedUser || undefined}
           type="user"
           onEdit={() => {
             setEditingUser(selectedUser);
@@ -878,10 +789,10 @@ export default function UsersManagement() {
           setSelectedUser(null);
         }}
         onConfirm={handleDeleteConfirm}
-        title="⚠️ Permanently Delete User"
+        title="Delete User"
         message={selectedUser ? 
-          `Are you sure you want to PERMANENTLY DELETE ${selectedUser.firstName} ${selectedUser.lastName}? This user will be completely removed from the system and cannot be recovered.` :
-          'Are you sure you want to permanently delete this user? This action cannot be undone.'
+          `Are you sure you want to delete ${selectedUser.firstName} ${selectedUser.lastName}? This action cannot be undone.` :
+          'Are you sure you want to delete this user? This action cannot be undone.'
         }
         confirmText="Delete User"
         variant="danger"

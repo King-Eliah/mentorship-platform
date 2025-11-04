@@ -1,5 +1,5 @@
-import { frontendService } from './frontendService';
-import { EventType, EventStatus, Event } from '../types';
+import { api } from './api';
+import { EventType, EventStatus } from '../types';
 
 export interface EventFilters {
   type?: EventType | 'all';
@@ -7,181 +7,232 @@ export interface EventFilters {
   search?: string;
   sortBy?: string;
   page?: number;
-  size?: number;
+  limit?: number;
 }
 
 export interface CreateEventRequest {
   title: string;
   description?: string;
-  scheduledAt: string;
-  duration: number;
+  startTime: string;
+  endTime: string;
   location?: string;
+  isVirtual?: boolean;
+  meetingLink?: string;
   maxAttendees?: number;
-  currentAttendees?: number;
   type: EventType;
-  status: EventStatus;
-  organizerId: string;
+  isPublic?: boolean;
+  groupId?: string;
+  attachments?: string;
+}
+
+export interface UpdateEventRequest {
+  title?: string;
+  description?: string;
+  startTime?: string;
+  endTime?: string;
+  location?: string;
+  isVirtual?: boolean;
+  meetingLink?: string;
+  maxAttendees?: number;
+  type?: EventType;
+  isPublic?: boolean;
   groupId?: string;
 }
 
-export interface UpdateEventRequest extends Partial<CreateEventRequest> {
+export interface EventAttendee {
+  id: string;
+  userId: string;
+  eventId: string;
+  status: string;
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    avatar?: string;
+  };
 }
 
-// Mock storage keys
-const JOINED_EVENTS_KEY = 'mentorconnect_joined_events';
-const EVENT_ATTENDEES_KEY = 'mentorconnect_event_attendees';
+export interface Event {
+  id: string;
+  title: string;
+  description?: string;
+  startTime: string;
+  endTime: string;
+  location?: string;
+  isVirtual?: boolean;
+  meetingLink?: string;
+  type: EventType;
+  status: EventStatus;
+  maxAttendees?: number;
+  isPublic: boolean;
+  creatorId: string;
+  groupId?: string;
+  creator: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    avatar?: string;
+  };
+  attendees: EventAttendee[];
+  createdAt: string;
+  updatedAt: string;
+  // Compatibility fields for legacy frontend components
+  // scheduledAt mirrors startTime; organizerId mirrors creatorId
+  scheduledAt?: string;
+  organizerId?: string;
+  // Optional duration in minutes derived from start/end
+  duration?: number;
+}
 
-// Helper functions for localStorage persistence
-const getJoinedEvents = (): string[] => {
-  try {
-    return JSON.parse(localStorage.getItem(JOINED_EVENTS_KEY) || '[]');
-  } catch {
-    return [];
-  }
-};
-
-const saveJoinedEvents = (eventIds: string[]): void => {
-  localStorage.setItem(JOINED_EVENTS_KEY, JSON.stringify(eventIds));
-};
-
-const getEventAttendees = (eventId: string): string[] => {
-  try {
-    const allAttendees = JSON.parse(localStorage.getItem(EVENT_ATTENDEES_KEY) || '{}');
-    return allAttendees[eventId] || [];
-  } catch {
-    return [];
-  }
-};
-
-const saveEventAttendees = (eventId: string, attendeeIds: string[]): void => {
-  try {
-    const allAttendees = JSON.parse(localStorage.getItem(EVENT_ATTENDEES_KEY) || '{}');
-    allAttendees[eventId] = attendeeIds;
-    localStorage.setItem(EVENT_ATTENDEES_KEY, JSON.stringify(allAttendees));
-  } catch {
-    // Handle storage errors gracefully
-  }
-};
-
-// Simulate API delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+export interface EventsResponse {
+  events: Event[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
 
 export const eventService = {
-  async getEvents(_params: EventFilters): Promise<Event[]> {
-    return frontendService.getEvents();
+  /**
+   * Get all events with optional filters
+   */
+  async getEvents(params: EventFilters = {}): Promise<Event[]> {
+    const queryParams: Record<string, string> = {};
+    
+    if (params.type && params.type !== 'all') queryParams.type = params.type;
+    if (params.status && params.status !== 'all') queryParams.status = params.status;
+    if (params.page) queryParams.page = params.page.toString();
+    if (params.limit) queryParams.limit = params.limit.toString();
+
+    const response = await api.get<EventsResponse>('/events', queryParams);
+    // Map backend fields to include compatibility properties
+    return response.events.map(e => ({
+      ...e,
+      scheduledAt: e.startTime,
+      organizerId: e.creatorId,
+      duration: e.startTime && e.endTime
+        ? Math.max(0, Math.round((new Date(e.endTime).getTime() - new Date(e.startTime).getTime()) / 60000))
+        : undefined,
+    }));
   },
-  
-  async createEvent(eventData: CreateEventRequest): Promise<Event> {
-    return frontendService.createEvent(eventData);
-  },
-  
-  async updateEvent(id: string, updates: UpdateEventRequest): Promise<Event> {
-    return frontendService.updateEvent(id, updates);
-  },
-  
+
+  /**
+   * Get a single event by ID
+   */
   async getEvent(id: string): Promise<Event> {
-    return frontendService.getEvent(id);
+    const response = await api.get<{ event: Event }>(`/events/${id}`);
+    const e = response.event;
+    return {
+      ...e,
+      scheduledAt: e.startTime,
+      organizerId: e.creatorId,
+      duration: e.startTime && e.endTime
+        ? Math.max(0, Math.round((new Date(e.endTime).getTime() - new Date(e.startTime).getTime()) / 60000))
+        : undefined,
+    };
   },
 
+  /**
+   * Get event by ID (alias for compatibility)
+   */
   async getEventById(id: string): Promise<Event> {
-    return frontendService.getEvent(id);
+    return this.getEvent(id);
   },
 
-  // Mock implementations for event operations
-  async joinEvent(eventId: string, userId: string): Promise<void> {
-    await delay(300); // Simulate network delay
-    
-    // Occasionally simulate errors for testing error handling
-    if (Math.random() < 0.1) {
-      throw new Error('Failed to join event. Please try again.');
-    }
-    
-    const joinedEvents = getJoinedEvents();
-    if (!joinedEvents.includes(eventId)) {
-      joinedEvents.push(eventId);
-      saveJoinedEvents(joinedEvents);
-    }
-    
-    const attendees = getEventAttendees(eventId);
-    if (!attendees.includes(userId)) {
-      attendees.push(userId);
-      saveEventAttendees(eventId, attendees);
-    }
-    
-    console.log(`✓ User ${userId} joined event ${eventId}`);
+  /**
+   * Create a new event
+   */
+  async createEvent(eventData: CreateEventRequest): Promise<Event> {
+    const response = await api.post<{ event: Event }>('/events', eventData);
+    return response.event;
   },
 
-  async leaveEvent(eventId: string, userId: string): Promise<void> {
-    await delay(300);
-    
-    if (Math.random() < 0.1) {
-      throw new Error('Failed to leave event. Please try again.');
-    }
-    
-    const joinedEvents = getJoinedEvents();
-    const updatedJoined = joinedEvents.filter(id => id !== eventId);
-    saveJoinedEvents(updatedJoined);
-    
-    const attendees = getEventAttendees(eventId);
-    const updatedAttendees = attendees.filter(id => id !== userId);
-    saveEventAttendees(eventId, updatedAttendees);
-    
-    console.log(`✓ User ${userId} left event ${eventId}`);
+  /**
+   * Update an existing event
+   */
+  async updateEvent(id: string, updates: UpdateEventRequest): Promise<Event> {
+    const response = await api.put<{ event: Event }>(`/events/${id}`, updates);
+    return response.event;
   },
 
+  /**
+   * Delete an event
+   */
   async deleteEvent(eventId: string): Promise<void> {
-    await delay(500);
-    
-    if (Math.random() < 0.1) {
-      throw new Error('Failed to delete event. Please try again.');
-    }
-    
-    // Remove from joined events
-    const joinedEvents = getJoinedEvents();
-    const updatedJoined = joinedEvents.filter(id => id !== eventId);
-    saveJoinedEvents(updatedJoined);
-    
-    // Remove attendees data
-    try {
-      const allAttendees = JSON.parse(localStorage.getItem(EVENT_ATTENDEES_KEY) || '{}');
-      delete allAttendees[eventId];
-      localStorage.setItem(EVENT_ATTENDEES_KEY, JSON.stringify(allAttendees));
-    } catch {
-      // Handle storage errors gracefully
-    }
-    
-    console.log(`✓ Event ${eventId} deleted`);
+    await api.delete(`/events/${eventId}`);
   },
 
-  async getEventAttendees(eventId: string): Promise<string[]> {
-    await delay(200);
-    
-    if (Math.random() < 0.05) {
-      throw new Error('Failed to fetch attendees. Please try again.');
-    }
-    
-    return getEventAttendees(eventId);
+  /**
+   * Register/join an event
+   */
+  async joinEvent(eventId: string): Promise<void> {
+    await api.post(`/events/${eventId}/register`);
   },
 
-  // Helper method to check if user has joined an event
-  hasUserJoinedEvent(eventId: string): boolean {
-    const joinedEvents = getJoinedEvents();
-    return joinedEvents.includes(eventId);
+  /**
+   * Cancel registration/leave an event
+   */
+  async leaveEvent(eventId: string): Promise<void> {
+    await api.delete(`/events/${eventId}/register`);
   },
 
-  // Helper method to get attendee count
-  getAttendeeCount(eventId: string): number {
-    return getEventAttendees(eventId).length;
-  },
-
-  // Get all joined events for the current user
+  /**
+   * Get events the current user has joined
+   */
   async getJoinedEvents(): Promise<Event[]> {
-    await delay(300);
+    const response = await api.get<EventsResponse>('/events/joined');
     
-    const joinedEventIds = getJoinedEvents();
-    const allEvents = await frontendService.getEvents();
+    // Map backend fields to include compatibility properties
+    return response.events.map(e => ({
+      ...e,
+      scheduledAt: e.startTime,
+      organizerId: e.creatorId,
+      duration: e.startTime && e.endTime
+        ? Math.max(0, Math.round((new Date(e.endTime).getTime() - new Date(e.startTime).getTime()) / 60000))
+        : undefined,
+    }));
+  },
+
+  /**
+   * Get events for a specific user by ID (for mentors viewing mentee's events)
+   */
+  async getUserEvents(userId: string): Promise<Event[]> {
+    const response = await api.get<EventsResponse>(`/events/user/${userId}`);
     
-    // Filter events to only those the user has joined
-    return allEvents.filter(event => joinedEventIds.includes(event.id));
-  }
+    // Map backend fields to include compatibility properties
+    return response.events.map(e => ({
+      ...e,
+      scheduledAt: e.startTime,
+      organizerId: e.creatorId,
+      duration: e.startTime && e.endTime
+        ? Math.max(0, Math.round((new Date(e.endTime).getTime() - new Date(e.startTime).getTime()) / 60000))
+        : undefined,
+    }));
+  },
+
+  /**
+   * Get attendees for a specific event
+   */
+  async getEventAttendees(eventId: string): Promise<EventAttendee[]> {
+    const event = await this.getEvent(eventId);
+    return event.attendees;
+  },
+
+  /**
+   * Check if user has joined an event
+   */
+  hasUserJoinedEvent(event: Event, userId: string): boolean {
+    return event.attendees.some(
+      attendee => attendee.userId === userId && attendee.status === 'CONFIRMED'
+    );
+  },
+
+  /**
+   * Get attendee count for an event
+   */
+  getAttendeeCount(event: Event): number {
+    return event.attendees.filter(a => a.status === 'CONFIRMED').length;
+  },
 };

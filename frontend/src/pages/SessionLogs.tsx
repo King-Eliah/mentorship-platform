@@ -1,226 +1,169 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { Clock, Star } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardFooter } from '../components/ui/Card';
-import { Input } from '../components/ui/Input';
+import { Clock } from 'lucide-react';
+import { Card, CardContent } from '../components/ui/Card';
 import { DropdownSelect } from '../components/ui/DropdownSelect';
 import { Button } from '../components/ui/Button';
-import { ListSkeleton, CardSkeleton } from '../components/ui/Skeleton';
-import { useAuth } from '../context/AuthContext';
-
-interface SessionLog {
-  id: string;
-  mentorId: string;
-  menteeId: string;
-  title: string;
-  duration: number;
-  notes: string;
-  rating?: number;
-  date: string | Date;
-}
-
-const fallbackSessions: SessionLog[] = Array.from({ length: 6 }, (_, i) => ({
-  id: `s-${i + 1}`,
-  mentorId: 'user-1',
-  menteeId: `user-${i + 2}`,
-  title: `Mentorship Session #${i + 1}`,
-  duration: 45 + (i % 3) * 15,
-  notes: 'Discussed progress and set goals for next week.',
-  rating: 4 - (i % 2) * 0.5,
-  date: new Date(Date.now() - i * 86400000).toISOString(),
-}));
+import { ListSkeleton } from '../components/ui/Skeleton';
+import { sessionLogService, SessionLog as SessionLogType } from '../services/sessionLogService';
+import { useTheme } from '../context/ThemeContext';
 
 export const SessionLogs: React.FC = () => {
-  const { user } = useAuth();
+  const { isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<SessionLog[]>([]);
+  const [sessions, setSessions] = useState<SessionLogType[]>([]);
+  const [filterAction, setFilterAction] = useState<string>('');
 
-  // New session form state
-  const [title, setTitle] = useState('');
-  const [duration, setDuration] = useState<number>(60);
-  const [notes, setNotes] = useState('');
-  const [rating, setRating] = useState<number | ''>('');
-  const [menteeId, setMenteeId] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        // Use fallback sessions since we don't have session logs in frontend service yet
-        setSessions(fallbackSessions);
-        // const res = await frontendService.getSessionLogs(); // TODO: Implement when needed
-      } catch {
-        setSessions(fallbackSessions);
-        setError('Showing fallback data (backend unavailable)');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
-
-  const handleCreate = async () => {
-    if (!title.trim() || !menteeId) return;
-    setSubmitting(true);
+  const loadSessionLogs = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const payload = {
-        mentorId: user?.id || 'user-1',
-        menteeId,
-        title,
-        duration,
-        notes,
-        rating: rating === '' ? undefined : Number(rating),
-  } as SessionLog;
-  // Simulate creating session log
-  const created = { 
-    ...payload, 
-    id: Math.random().toString(36).substr(2, 9),
-    createdAt: new Date().toISOString()
-  };
-  setSessions((prev) => [created as SessionLog, ...prev]);
-      setTitle('');
-      setDuration(60);
-      setNotes('');
-      setRating('');
-      setMenteeId('');
-    } catch {
-      // Optimistic add to list when backend not available
-      const temp: SessionLog = {
-        id: `tmp-${Date.now()}`,
-        mentorId: user?.id || 'user-1',
-        menteeId,
-        title,
-        duration,
-        notes,
-        rating: rating === '' ? undefined : Number(rating),
-        date: new Date().toISOString(),
-      };
-      setSessions((prev) => [temp, ...prev]);
+      const logs = await sessionLogService.getUserLogs(50, filterAction || undefined);
+      setSessions(logs);
+    } catch (err) {
+      console.error('Failed to load session logs:', err);
+      setError('Failed to load session logs');
+      setSessions([]);
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
+  useEffect(() => {
+    loadSessionLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterAction]);
+
+  const getActionIcon = (action: string) => {
+    if (action.toLowerCase().includes('login')) return '';
+    if (action.toLowerCase().includes('logout')) return '';
+    if (action.toLowerCase().includes('create')) return '';
+    if (action.toLowerCase().includes('update')) return '';
+    if (action.toLowerCase().includes('delete')) return '';
+    return '';
+  };
+
+  const formatAction = (action: string) => {
+    return action
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="container mx-auto p-4 sm:p-6">
+        <h1 className={`text-2xl sm:text-3xl font-bold mb-6 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+          Session Logs
+        </h1>
+        <ListSkeleton items={6} />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Session Logs</h1>
-        {error && <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">{error}</p>}
+    <div className="container mx-auto p-4 sm:p-6 max-w-4xl">
+      <div className="flex flex-col xs:flex-row xs:justify-between xs:items-center mb-6 gap-3">
+        <h1 className={`text-2xl sm:text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+          Session Logs
+        </h1>
+        <Button onClick={loadSessionLogs} className="w-full xs:w-auto text-xs sm:text-sm">
+          Refresh
+        </Button>
       </div>
 
-      {/* Create session */}
-      <Card>
-        <CardHeader>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Log a Session</h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Record details from a mentorship session</p>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., Weekly Check-in" />
-            <DropdownSelect
-              label="Duration"
-              value={String(duration)}
-              onChange={(value) => setDuration(Number(value))}
-              placeholder="Select duration"
-              options={[30, 45, 60, 90, 120].map((m) => ({ 
-                value: String(m), 
-                label: `${m} minutes`, 
-                icon: <Clock className="w-4 h-4" />, 
-                description: `${m} minute session` 
-              }))}
-            />
-            <Input label="Mentee ID" value={menteeId} onChange={(e) => setMenteeId(e.target.value)} placeholder="user-123" />
-            <DropdownSelect
-              label="Rating (optional)"
-              value={rating === '' ? '' : String(rating)}
-              onChange={(value) => setRating(value ? Number(value) : '')}
-              placeholder="Select rating"
-              options={[
-                { value: '', label: 'No rating', icon: <Star className="w-4 h-4" />, description: 'Skip rating' }, 
-                ...[1, 2, 3, 4, 5].map((r) => ({ 
-                  value: String(r), 
-                  label: `${r} Stars`, 
-                  icon: <Star className="w-4 h-4" />, 
-                  description: `${r} out of 5 stars` 
-                }))
-              ]}
-            />
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={4}
-                placeholder="What did you discuss? Any action items?"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              />
-            </div>
-          </div>
-        </CardContent>
-        <CardFooter className="flex justify-end">
-          <Button onClick={handleCreate} loading={submitting} disabled={!title.trim() || !menteeId}>
-            Save Log
-          </Button>
-        </CardFooter>
-      </Card>
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-3 sm:p-4 rounded-lg mb-6 text-xs sm:text-sm">
+          {error}
+        </div>
+      )}
 
-      {/* Sessions list */}
-      <Card>
-        <CardHeader>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Sessions</h3>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-4">
-              <ListSkeleton items={3} itemComponent={CardSkeleton} />
+      <div className="mb-6">
+        <DropdownSelect
+          label="Filter by Action"
+          value={filterAction}
+          onChange={(value) => setFilterAction(value)}
+          options={[
+            { label: 'All Actions', value: '' },
+            { label: 'Login', value: 'LOGIN' },
+            { label: 'Logout', value: 'LOGOUT' },
+            { label: 'Create', value: 'CREATE' },
+            { label: 'Update', value: 'UPDATE' },
+            { label: 'Delete', value: 'DELETE' },
+          ]}
+        />
+      </div>
+
+      {sessions.length === 0 ? (
+        <Card>
+          <CardContent>
+            <div className="text-center py-8 sm:py-12">
+              <Clock className={`w-12 sm:w-16 h-12 sm:h-16 mx-auto mb-4 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} />
+              <p className={`text-base sm:text-lg ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                No session logs found
+              </p>
             </div>
-          ) : sessions.length === 0 ? (
-            <div className="p-6 text-gray-600 dark:text-gray-400">No sessions yet.</div>
-          ) : (
-            <div className="space-y-3 p-4">
-              {sessions.map((s) => (
-                <div key={s.id} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                  <div className="flex items-center justify-between gap-4">
-                    {/* Session Info - Compact */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {s.title}
-                        </h4>
-                        {s.rating && (
-                          <span className="flex items-center text-xs font-medium text-amber-600 dark:text-amber-400 flex-shrink-0">
-                            <Star className="w-3 h-3 mr-0.5" />
-                            {s.rating.toFixed(1)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400">
-                        <span className="flex items-center flex-shrink-0">
-                          <Clock className="w-3 h-3 mr-1" />
-                          {s.duration} min
-                        </span>
-                        <span className="truncate">
-                          {new Date(s.date).toLocaleString()}
-                        </span>
-                        <span className="truncate">
-                          Mentee: {s.menteeId}
-                        </span>
-                      </div>
-                      {s.notes && (
-                        <p className="text-xs text-gray-700 dark:text-gray-300 mt-2 line-clamp-1">
-                          {s.notes}
-                        </p>
-                      )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3 sm:space-y-4">
+          {sessions.map((session) => (
+            <Card key={session.id}>
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xl sm:text-2xl">{getActionIcon(session.action)}</span>
+                      <h3 className={`text-base sm:text-lg font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {formatAction(session.action)}
+                      </h3>
                     </div>
+                    {session.user && (
+                      <p className={`text-xs sm:text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'} mb-2 truncate`}>
+                        User: {session.user.firstName} {session.user.lastName} ({session.user.email})
+                      </p>
+                    )}
+                    {session.metadata && Object.keys(session.metadata).length > 0 && (
+                      <div className={`text-xs sm:text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'} mt-2`}>
+                        <details className="cursor-pointer">
+                          <summary className="hover:underline font-medium">View Details</summary>
+                          <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs overflow-auto max-w-full">
+                            {JSON.stringify(session.metadata, null, 2)}
+                          </pre>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right flex-shrink-0 sm:ml-4">
+                    <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400 justify-end sm:justify-end">
+                      <Clock className="w-3 sm:w-4 h-3 sm:h-4 flex-shrink-0" />
+                      <span className="whitespace-nowrap">{formatDate(session.createdAt)}</span>
+                    </div>
+                    {session.ipAddress && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        IP: {session.ipAddress}
+                      </p>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
+
+export default SessionLogs;

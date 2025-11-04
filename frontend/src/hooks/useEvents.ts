@@ -1,19 +1,19 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useApiService, useMutation } from './useApiService';
-import { eventService, EventFilters, CreateEventRequest, UpdateEventRequest } from '../services/eventService';
+import { eventService, EventFilters, CreateEventRequest, UpdateEventRequest, Event } from '../services/eventService';
 
 /**
  * Hook for fetching events with filters and pagination-like interface
  */
 export function useEvents(filters: EventFilters = {}) {
-  const [allEvents, setAllEvents] = useState<any[]>([]);
+  const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize] = useState(20);
   
   const api = useApiService(
     () => eventService.getEvents(filters),
     {
-      loadingInitial: true,
+      loadingInitial: false,
       showErrorToast: true
     }
   );
@@ -28,12 +28,14 @@ export function useEvents(filters: EventFilters = {}) {
   const loadPage = useCallback((page: number) => {
     setCurrentPage(page);
     return api.execute();
-  }, [api.execute]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const refresh = useCallback(() => {
     setCurrentPage(0);
     return api.execute();
-  }, [api.execute]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Calculate pagination
   const startIndex = currentPage * pageSize;
@@ -65,7 +67,8 @@ export function useEvent(eventId: string) {
     if (eventId) {
       api.execute();
     }
-  }, [eventId, api.execute]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
 
   return api;
 }
@@ -145,8 +148,7 @@ export function useDeleteEvent() {
  */
 export function useJoinEvent() {
   return useMutation(
-    ({ eventId, userId }: { eventId: string; userId: string }) => 
-      eventService.joinEvent(eventId, userId),
+    (eventId: string) => eventService.joinEvent(eventId),
     {
       showSuccessToast: true,
       showErrorToast: true
@@ -159,8 +161,7 @@ export function useJoinEvent() {
  */
 export function useLeaveEvent() {
   return useMutation(
-    ({ eventId, userId }: { eventId: string; userId: string }) => 
-      eventService.leaveEvent(eventId, userId),
+    (eventId: string) => eventService.leaveEvent(eventId),
     {
       showSuccessToast: true,
       showErrorToast: true
@@ -181,7 +182,8 @@ export function useEventAttendees(eventId: string) {
     if (eventId) {
       api.execute();
     }
-  }, [eventId, api.execute]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
 
   return api;
 }

@@ -1,47 +1,21 @@
-import React, { useState } from 'react';
-import { Mail, Briefcase, Award, Edit2, Save, X, Target, Plus, Calendar, Trash2, Camera, User as UserIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Briefcase, Award, Edit2, Save, X, Target, Camera, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import FileUpload from '../components/FileUpload';
-import { ConfirmationDialog } from '../components/ui/ConfirmationDialog';
-import { Role } from '../types';
-import { useGoals } from '../context/GoalContext';
-import { frontendService } from '../services/frontendService';
+import { profileService } from '../services/profileService';
+import SkillInput, { Skill } from '../components/profile/SkillInput';
+import InterestSelector, { Interest } from '../components/profile/InterestSelector';
 import toast from 'react-hot-toast';
 
-interface UpdateUserRequest {
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  bio?: string;
-  skills?: string;
-  experience?: string;
-}
-
 export const Profile: React.FC = () => {
-  const { user } = useAuth();
-  const { goals, addGoal, deleteGoal, toggleGoalStatus } = useGoals();
+  const { user, refreshUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showGoalForm, setShowGoalForm] = useState(false);
   const [showAvatarUpload, setShowAvatarUpload] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{
-    isOpen: boolean;
-    goalId: string | null;
-    goalTitle: string;
-  }>({
-    isOpen: false,
-    goalId: null,
-    goalTitle: ''
-  });
-  const [goalFormData, setGoalFormData] = useState({
-    title: '',
-    description: '',
-    deadline: ''
-  });
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -50,6 +24,59 @@ export const Profile: React.FC = () => {
     skills: user?.skills || '',
     experience: user?.experience || '',
   });
+  
+  // Skills and Interests state
+  const [userSkills, setUserSkills] = useState<Skill[]>([]);
+  const [userInterests, setUserInterests] = useState<Interest[]>([]);
+
+  // Update formData when user data changes
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || '',
+        bio: user.bio || '',
+        skills: user.skills || '',
+        experience: user.experience || '',
+      });
+    }
+  }, [user]);
+
+  // Initialize skills and interests from user data
+  useEffect(() => {
+    // Initialize skills from comma-separated string or array
+    if (user?.skills) {
+      const skillsArray = typeof user.skills === 'string' 
+        ? user.skills.split(',').map(s => s.trim()).filter(Boolean)
+        : Array.isArray(user.skills) 
+        ? user.skills 
+        : [];
+      
+      const skills: Skill[] = skillsArray.map((skill: string, index: number) => ({
+        id: `skill-${index}`,
+        name: skill,
+        level: 'intermediate' as const,
+        category: 'General'
+      }));
+      setUserSkills(skills);
+    }
+    
+    // Initialize interests (if available in extended user data)
+    const userWithInterests = user as typeof user & { interests?: string[] };
+    if (userWithInterests?.interests) {
+      const interestsArray = Array.isArray(userWithInterests.interests) 
+        ? userWithInterests.interests 
+        : [];
+      
+      const interests: Interest[] = interestsArray.map((interest: string, index: number) => ({
+        id: `interest-${index}`,
+        name: interest,
+        category: 'General'
+      }));
+      setUserInterests(interests);
+    }
+  }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData(prev => ({
@@ -58,17 +85,18 @@ export const Profile: React.FC = () => {
     }));
   };
 
-  const handleGoalFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setGoalFormData(prev => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }));
-  };
-
-  const handleAvatarUpload = (fileUrl: string) => {
+  const handleAvatarUpload = async (fileUrl: string) => {
     setAvatarPreview(fileUrl);
     setShowAvatarUpload(false);
-    toast.success('Avatar uploaded successfully!');
+    
+    try {
+      await profileService.updateAvatar(user?.id || '', fileUrl);
+      await refreshUser(); // Refresh user data to show updated avatar
+      toast.success('Avatar uploaded successfully!');
+    } catch (error) {
+      console.error('Avatar upload error:', error);
+      toast.error('Failed to update avatar');
+    }
   };
 
   const handleAvatarError = (error: string) => {
@@ -78,19 +106,25 @@ export const Profile: React.FC = () => {
   const handleSave = async () => {
     setLoading(true);
     try {
-      const updateData: UpdateUserRequest = {
+      const updateData = {
         firstName: formData.firstName,
         lastName: formData.lastName,
         bio: formData.bio,
-        skills: formData.skills,
-        experience: formData.experience,
+        profile: {
+          skills: userSkills.map(s => s.name),
+          interests: userInterests.map(i => i.name),
+        }
       };
 
-      await frontendService.updateUser(user?.id || '', updateData);
+      await profileService.updateProfile(user?.id || '', updateData);
+      
+      // Refresh user data to show updated information
+      await refreshUser();
       
       toast.success('Profile updated successfully!');
       setIsEditing(false);
-    } catch (err) {
+    } catch (error) {
+      console.error('Profile update error:', error);
       toast.error('Failed to update profile. Please try again.');
     } finally {
       setLoading(false);
@@ -109,66 +143,6 @@ export const Profile: React.FC = () => {
     setIsEditing(false);
   };
 
-  const handleCreateGoal = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!goalFormData.title.trim() || !goalFormData.description.trim() || !goalFormData.deadline) {
-      toast.error('Please fill in all fields');
-      return;
-    }
-
-    addGoal({
-      title: goalFormData.title,
-      description: goalFormData.description,
-      deadline: goalFormData.deadline,
-      status: 'pending'
-    });
-
-    setGoalFormData({ title: '', description: '', deadline: '' });
-    setShowGoalForm(false);
-    toast.success('Goal created successfully!');
-  };
-
-  const handleDeleteGoal = (goalId: string, goalTitle: string) => {
-    setDeleteConfirmation({
-      isOpen: true,
-      goalId: goalId,
-      goalTitle: goalTitle
-    });
-  };
-
-  const confirmDeleteGoal = () => {
-    if (deleteConfirmation.goalId) {
-      deleteGoal(deleteConfirmation.goalId);
-      toast.success('Goal deleted successfully!');
-      setDeleteConfirmation({
-        isOpen: false,
-        goalId: null,
-        goalTitle: ''
-      });
-    }
-  };
-
-  const cancelDeleteGoal = () => {
-    setDeleteConfirmation({
-      isOpen: false,
-      goalId: null,
-      goalTitle: ''
-    });
-  };
-
-  const handleToggleGoalStatus = (goalId: string) => {
-    toggleGoalStatus(goalId);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
   if (!user) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -178,22 +152,22 @@ export const Profile: React.FC = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Profile</h1>
+    <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8 px-4 sm:px-6 md:px-8 py-4 sm:py-6">
+      {/* Header - Mobile Responsive */}
+      <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-3 xs:gap-4">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">My Profile</h1>
         {!isEditing ? (
-          <Button onClick={() => setIsEditing(true)} size="sm">
+          <Button onClick={() => setIsEditing(true)} size="sm" className="w-full xs:w-auto">
             <Edit2 className="w-4 h-4 mr-2" />
             Edit Profile
           </Button>
         ) : (
-          <div className="flex space-x-2">
-            <Button onClick={handleSave} loading={loading} size="sm">
+          <div className="flex flex-col xs:flex-row space-y-2 xs:space-y-0 xs:space-x-2 gap-2">
+            <Button onClick={handleSave} loading={loading} size="sm" className="w-full xs:w-auto">
               <Save className="w-4 h-4 mr-2" />
               Save
             </Button>
-            <Button onClick={handleCancel} variant="secondary" size="sm">
+            <Button onClick={handleCancel} variant="secondary" size="sm" className="w-full xs:w-auto">
               <X className="w-4 h-4 mr-2" />
               Cancel
             </Button>
@@ -201,20 +175,20 @@ export const Profile: React.FC = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Profile Summary */}
-        <div className="lg:col-span-1">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
+        {/* Profile Summary - Mobile Responsive */}
+        <div className="md:col-span-1">
           <Card>
-            <CardContent className="text-center p-6">
+            <CardContent className="text-center p-4 sm:p-6">
               <div className="relative group mb-4">
                 {avatarPreview ? (
                   <img 
                     src={avatarPreview} 
                     alt="Profile Avatar" 
-                    className="w-24 h-24 rounded-full mx-auto object-cover"
+                    className="w-20 sm:w-24 h-20 sm:h-24 rounded-full mx-auto object-cover"
                   />
                 ) : (
-                  <div className="w-24 h-24 bg-gradient-to-r from-primary-500 to-primary-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mx-auto">
+                  <div className="w-20 sm:w-24 h-20 sm:h-24 bg-gradient-to-r from-primary-500 to-primary-600 rounded-full flex items-center justify-center text-white text-lg sm:text-2xl font-bold mx-auto">
                     {user.firstName.charAt(0)}{user.lastName.charAt(0)}
                   </div>
                 )}
@@ -222,22 +196,22 @@ export const Profile: React.FC = () => {
                 {isEditing && (
                   <button
                     onClick={() => setShowAvatarUpload(true)}
-                    className="absolute inset-0 w-24 h-24 rounded-full bg-black bg-opacity-50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity mx-auto"
+                    className="absolute inset-0 w-20 sm:w-24 h-20 sm:h-24 rounded-full bg-black bg-opacity-50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity mx-auto"
                   >
-                    <Camera className="w-6 h-6" />
+                    <Camera className="w-5 sm:w-6 h-5 sm:h-6" />
                   </button>
                 )}
               </div>
 
-              {/* Avatar Upload Modal */}
+              {/* Avatar Upload Modal - Mobile Optimized */}
               {showAvatarUpload && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 sm:p-6 max-w-md w-full">
                     <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Upload Avatar</h3>
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">Upload Avatar</h3>
                       <button
                         onClick={() => setShowAvatarUpload(false)}
-                        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1"
                       >
                         <X className="w-5 h-5" />
                       </button>
@@ -254,15 +228,29 @@ export const Profile: React.FC = () => {
                 </div>
               )}
               
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
                 {user.firstName} {user.lastName}
               </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2">
                 {user.role}
               </p>
-              <div className="flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
-                <Mail className="w-4 h-4 mr-1" />
-                {user.email}
+              <div className="flex items-center justify-center text-xs sm:text-sm text-gray-500 dark:text-gray-400 break-all px-1">
+                <Mail className="w-4 h-4 mr-1 flex-shrink-0" />
+                <span className="truncate">{user.email}</span>
+              </div>
+              <div className="mt-3 flex items-center justify-center gap-2 text-xs font-mono bg-gray-100 dark:bg-gray-900 px-3 py-2 rounded-lg">
+                <span className="text-gray-600 dark:text-gray-400">ID:</span>
+                <span className="text-gray-800 dark:text-gray-200 font-semibold">{user.id}</span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(user.id);
+                    toast.success('User ID copied!');
+                  }}
+                  className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  title="Copy ID"
+                >
+                  📋
+                </button>
               </div>
               <div className={`mt-4 inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
                 user.isActive 
@@ -275,32 +263,32 @@ export const Profile: React.FC = () => {
           </Card>
         </div>
 
-        {/* Profile Details */}
-        <div className="lg:col-span-2 space-y-6">
+        {/* Profile Details - Mobile Responsive */}
+        <div className="md:col-span-2 space-y-4 sm:space-y-6">
           {/* Basic Information */}
           <Card>
             <CardHeader>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+              <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-white">
                 Basic Information
               </h3>
             </CardHeader>
             <CardContent className="space-y-4">
               {isEditing ? (
                 <>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <Input
                       name="firstName"
                       label="First Name"
                       value={formData.firstName}
                       onChange={handleChange}
-                      icon={<UserIcon className="w-4 h-4" />}
+                      leftIcon={<UserIcon className="w-4 h-4" />}
                     />
                     <Input
                       name="lastName"
                       label="Last Name"
                       value={formData.lastName}
                       onChange={handleChange}
-                      icon={<UserIcon className="w-4 h-4" />}
+                      leftIcon={<UserIcon className="w-4 h-4" />}
                     />
                   </div>
                   <Input
@@ -309,28 +297,28 @@ export const Profile: React.FC = () => {
                     type="email"
                     value={formData.email}
                     onChange={handleChange}
-                    icon={<Mail className="w-4 h-4" />}
+                    leftIcon={<Mail className="w-4 h-4" />}
                   />
                 </>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       First Name
                     </label>
-                    <p className="text-sm text-gray-900 dark:text-white">{user.firstName}</p>
+                    <p className="text-sm sm:text-base text-gray-900 dark:text-white">{user.firstName}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Last Name
                     </label>
-                    <p className="text-sm text-gray-900 dark:text-white">{user.lastName}</p>
+                    <p className="text-sm sm:text-base text-gray-900 dark:text-white">{user.lastName}</p>
                   </div>
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <div className="col-span-1 sm:col-span-2">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Email Address
                     </label>
-                    <p className="text-sm text-gray-900 dark:text-white">{user.email}</p>
+                    <p className="text-sm sm:text-base text-gray-900 dark:text-white break-all">{user.email}</p>
                   </div>
                 </div>
               )}
@@ -365,36 +353,78 @@ export const Profile: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Skills & Experience */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Skills & Interests - Mobile Responsive */}
+          <div className="grid grid-cols-1 gap-4 sm:gap-6">
             <Card>
               <CardHeader>
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
-                  <Award className="w-5 h-5 mr-2" />
+                <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                  <Award className="w-4 sm:w-5 h-4 sm:h-5 mr-2 flex-shrink-0" />
                   Skills
                 </h3>
               </CardHeader>
               <CardContent>
                 {isEditing ? (
-                  <Input
-                    name="skills"
-                    label="Skills"
-                    value={formData.skills}
-                    onChange={handleChange}
-                    placeholder="e.g., JavaScript, React, Node.js"
+                  <SkillInput
+                    skills={userSkills}
+                    onSkillsChange={setUserSkills}
+                    placeholder="Start typing to add skills..."
                   />
                 ) : (
-                  <p className="text-gray-600 dark:text-gray-300">
-                    {user.skills || 'No skills listed yet.'}
-                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {userSkills.length > 0 ? (
+                      userSkills.map((skill) => (
+                        <span
+                          key={skill.id}
+                          className="px-2 sm:px-3 py-1 bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200 rounded-full text-xs sm:text-sm font-medium"
+                        >
+                          {skill.name}
+                        </span>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-600 dark:text-gray-300">No skills listed yet.</p>
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
-                  <Briefcase className="w-5 h-5 mr-2" />
+                <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                  <Target className="w-4 sm:w-5 h-4 sm:h-5 mr-2 flex-shrink-0" />
+                  Interests
+                </h3>
+              </CardHeader>
+              <CardContent>
+                {isEditing ? (
+                  <InterestSelector
+                    selectedInterests={userInterests}
+                    onInterestsChange={setUserInterests}
+                    placeholder="Select your interests..."
+                  />
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {userInterests.length > 0 ? (
+                      userInterests.map((interest) => (
+                        <span
+                          key={interest.id}
+                          className="px-2 sm:px-3 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full text-xs sm:text-sm font-medium"
+                        >
+                          {interest.name}
+                        </span>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-600 dark:text-gray-300">No interests selected yet.</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                  <Briefcase className="w-4 sm:w-5 h-4 sm:h-5 mr-2 flex-shrink-0" />
                   Experience
                 </h3>
               </CardHeader>
@@ -408,7 +438,7 @@ export const Profile: React.FC = () => {
                     placeholder="e.g., 3+ years in web development"
                   />
                 ) : (
-                  <p className="text-gray-600 dark:text-gray-300">
+                  <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300">
                     {user.experience || 'No experience listed yet.'}
                   </p>
                 )}
@@ -417,166 +447,6 @@ export const Profile: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Goals Section - Only for Mentees */}
-      {user.role === Role.MENTEE && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
-                <Target className="w-5 h-5 mr-2" />
-                My Goals
-              </h3>
-              <Button 
-                onClick={() => setShowGoalForm(!showGoalForm)} 
-                size="sm"
-                variant={showGoalForm ? "secondary" : "primary"}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                {showGoalForm ? 'Cancel' : 'Add Goal'}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Goal Creation Form */}
-            {showGoalForm && (
-              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
-                <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">Create New Goal</h4>
-                <form onSubmit={handleCreateGoal} className="space-y-4">
-                  <Input
-                    name="title"
-                    label="Goal Title"
-                    value={goalFormData.title}
-                    onChange={handleGoalFormChange}
-                    placeholder="e.g., Learn React Native"
-                    required
-                  />
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Description
-                    </label>
-                    <textarea
-                      name="description"
-                      rows={3}
-                      value={goalFormData.description}
-                      onChange={handleGoalFormChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 dark:focus:ring-primary-400 dark:focus:border-primary-400"
-                      placeholder="Describe your goal and how you plan to achieve it..."
-                      required
-                    />
-                  </div>
-                  <Input
-                    name="deadline"
-                    label="Deadline"
-                    type="date"
-                    value={goalFormData.deadline}
-                    onChange={handleGoalFormChange}
-                    icon={<Calendar className="w-4 h-4" />}
-                    required
-                  />
-                  <div className="flex space-x-2">
-                    <Button type="submit" size="sm">
-                      Create Goal
-                    </Button>
-                    <Button 
-                      type="button" 
-                      variant="secondary" 
-                      size="sm"
-                      onClick={() => setShowGoalForm(false)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {/* Goals List */}
-            {goals.length === 0 ? (
-              <div className="text-center py-8">
-                <Target className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-1">No goals yet</h4>
-                <p className="text-gray-500 dark:text-gray-400 mb-4">
-                  Set your first goal to start tracking your progress
-                </p>
-                <Button onClick={() => setShowGoalForm(true)} size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Your First Goal
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {goals.map((goal) => (
-                  <div
-                    key={goal.id}
-                    className={`border rounded-lg p-4 transition-colors ${
-                      goal.status === 'completed'
-                        ? 'border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20'
-                        : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <input
-                            type="checkbox"
-                            checked={goal.status === 'completed'}
-                            onChange={() => handleToggleGoalStatus(goal.id)}
-                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                          />
-                          <h5 className={`font-medium ${
-                            goal.status === 'completed'
-                              ? 'line-through text-gray-500 dark:text-gray-400'
-                              : 'text-gray-900 dark:text-white'
-                          }`}>
-                            {goal.title}
-                          </h5>
-                        </div>
-                        <p className={`text-sm mb-3 ${
-                          goal.status === 'completed'
-                            ? 'text-gray-400 dark:text-gray-500'
-                            : 'text-gray-600 dark:text-gray-300'
-                        }`}>
-                          {goal.description}
-                        </p>
-                        <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
-                          <div className="flex items-center">
-                            <Calendar className="w-3 h-3 mr-1" />
-                            Deadline: {formatDate(goal.deadline)}
-                          </div>
-                          <div>
-                            Created: {formatDate(goal.createdAt)}
-                          </div>
-                        </div>
-                      </div>
-                      <Button
-                        onClick={() => handleDeleteGoal(goal.id, goal.title)}
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={deleteConfirmation.isOpen}
-        title="Delete Goal"
-        message={`Are you sure you want to delete the goal "${deleteConfirmation.goalTitle}"? This action cannot be undone.`}
-        onConfirm={confirmDeleteGoal}
-        onCancel={cancelDeleteGoal}
-        confirmText="Delete Goal"
-        cancelText="Cancel"
-        confirmVariant="danger"
-      />
     </div>
   );
 };

@@ -36,7 +36,58 @@ createRoot(document.getElementById('root')!).render(
           <LoadingProvider>
             <GoalProvider>
               <App />
-              <Toaster position="top-right" />
+              <Toaster 
+                position="top-center"
+                toastOptions={{
+                  // Default options
+                  duration: 4000,
+                  style: {
+                    background: 'white',
+                    color: '#363636',
+                    padding: '16px',
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                    maxWidth: '500px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                  },
+                  // Success
+                  success: {
+                    duration: 3000,
+                    style: {
+                      background: '#10B981',
+                      color: 'white',
+                    },
+                    iconTheme: {
+                      primary: 'white',
+                      secondary: '#10B981',
+                    },
+                  },
+                  // Error
+                  error: {
+                    duration: 5000,
+                    style: {
+                      background: '#EF4444',
+                      color: 'white',
+                    },
+                    iconTheme: {
+                      primary: 'white',
+                      secondary: '#EF4444',
+                    },
+                  },
+                  // Loading
+                  loading: {
+                    style: {
+                      background: '#3B82F6',
+                      color: 'white',
+                    },
+                    iconTheme: {
+                      primary: 'white',
+                      secondary: '#3B82F6',
+                    },
+                  },
+                }}
+              />
             </GoalProvider>
           </LoadingProvider>
         </AuthProvider>

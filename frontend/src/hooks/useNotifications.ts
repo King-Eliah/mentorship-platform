@@ -1,12 +1,25 @@
-import { useApiService, usePaginatedApi, useMutation } from "./useApiService";
+import { useApiService, useMutation } from "./useApiService";
 import { notificationService } from "../services/notificationService";
+import { useEffect } from "react";
 
 export function useNotifications(filters = {}) {
-  return usePaginatedApi(
-    (page, size) =>
-      notificationService.getNotifications({ ...filters, page, size }),
-    { loadingInitial: true }
+  const { data, loading, execute } = useApiService(
+    () => notificationService.getNotifications(filters),
+    { loadingInitial: false }
   );
+
+  // Load on mount
+  useEffect(() => {
+    execute();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return {
+    items: data?.notifications || [],
+    loading,
+    unreadCount: data?.unreadCount || 0,
+    refresh: execute
+  };
 }
 
 export function useMarkAsRead() {

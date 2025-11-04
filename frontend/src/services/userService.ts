@@ -1,29 +1,16 @@
-import { api } from './api';import { api } from './api';
-
+import { api } from './api';
 import { User } from '../types';
 
-export async function deleteUser(userId: string): Promise<void> {
-
-  await api.delete(`/admin/users/${userId}`);export interface GetUsersParams {
-
-}  page?: number;
-
+export interface GetUsersParams {
+  page?: number;
   limit?: number;
-
-export async function getAllUsers() {  role?: string;
-
-  return api.get('/admin/users');  status?: string;
-
-}  search?: string;
-
+  role?: string;
+  status?: string;
+  search?: string;
 }
 
-export async function getUserById(id: string) {
-
-  return api.get(`/admin/users/${id}`);export interface GetUsersResponse {
-
-}  users: User[];
-
+export interface GetUsersResponse {
+  users: User[];
   pagination: {
     total: number;
     page: number;

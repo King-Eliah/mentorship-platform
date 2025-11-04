@@ -6,6 +6,8 @@ import { DropdownSelect } from '../ui/DropdownSelect';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { InviteCode, InviteCodeType } from '../../types';
 import toast from 'react-hot-toast';
+import backendService from '../../services/backendService';
+import { invitationService } from '../../services/invitationService';
 
 interface InviteCodeManagerProps {
   onRefresh?: () => void;
@@ -17,11 +19,11 @@ export const InviteCodeManager: React.FC<InviteCodeManagerProps> = ({ onRefresh 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState({
     type: InviteCodeType.MENTOR,
+    email: '',
     expiresInDays: 30,
     maxUses: 1,
   });
 
-  // Mock data for development
   useEffect(() => {
     loadInviteCodes();
   }, []);
@@ -29,33 +31,33 @@ export const InviteCodeManager: React.FC<InviteCodeManagerProps> = ({ onRefresh 
   const loadInviteCodes = async () => {
     setLoading(true);
     try {
-      // Mock invite codes data
-      const mockCodes: InviteCode[] = [
-        {
-          id: '1',
-          code: 'MENTOR-ABC123',
-          type: InviteCodeType.MENTOR,
-          createdBy: 'admin@mentorconnect.com',
-          createdAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          isActive: true,
-          maxUses: 1,
-          currentUses: 0,
-        },
-        {
-          id: '2',
-          code: 'ADMIN-XYZ789',
-          type: InviteCodeType.ADMIN,
-          createdBy: 'admin@mentorconnect.com',
-          createdAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          isActive: true,
-          maxUses: 1,
-          currentUses: 0,
-        },
-      ];
-      setInviteCodes(mockCodes);
-    } catch {
+      const response = await backendService.admin.getInvitations() as {
+        invitations: Array<{
+          id: string;
+          code: string;
+          role: string;
+          email: string | null;
+          createdAt: string;
+          expiresAt: string;
+          status: string;
+          usedBy: string | null;
+        }>;
+      };
+      // Transform backend data to match frontend InviteCode interface
+      const transformedCodes: InviteCode[] = response.invitations.map((inv) => ({
+        id: inv.id,
+        code: inv.code,
+        type: inv.role as InviteCodeType,
+        createdBy: inv.email || 'admin@mentorconnect.com',
+        createdAt: inv.createdAt,
+        expiresAt: inv.expiresAt,
+        isActive: inv.status === 'APPROVED' && new Date(inv.expiresAt) > new Date(),
+        maxUses: 1,
+        currentUses: inv.usedBy ? 1 : 0,
+      }));
+      setInviteCodes(transformedCodes);
+    } catch (error) {
+      console.error('Failed to load invite codes:', error);
       toast.error('Failed to load invite codes');
     } finally {
       setLoading(false);
@@ -63,16 +65,38 @@ export const InviteCodeManager: React.FC<InviteCodeManagerProps> = ({ onRefresh 
   };
 
   const generateInviteCode = async () => {
+    if (!formData.email || !formData.email.includes('@')) {
+      toast.error('Valid email is required');
+      return;
+    }
+
     setLoading(true);
     try {
+      const response = await backendService.admin.generateInvitationCode({
+        role: formData.type,
+        email: formData.email,
+        expiresInDays: formData.expiresInDays,
+      }) as {
+        invitation: {
+          id: string;
+          code: string;
+          role: string;
+          email: string | null;
+          createdAt: string;
+          expiresAt: string;
+          status: string;
+        };
+      };
+
+      // Transform backend response to match frontend InviteCode interface
       const newCode: InviteCode = {
-        id: `${Date.now()}`,
-        code: `${formData.type}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-        type: formData.type,
-        createdBy: 'admin@mentorconnect.com',
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + formData.expiresInDays * 24 * 60 * 60 * 1000).toISOString(),
-        isActive: true,
+        id: response.invitation.id,
+        code: response.invitation.code,
+        type: response.invitation.role as InviteCodeType,
+        createdBy: response.invitation.email || 'admin@mentorconnect.com',
+        createdAt: response.invitation.createdAt,
+        expiresAt: response.invitation.expiresAt,
+        isActive: response.invitation.status === 'APPROVED',
         maxUses: formData.maxUses,
         currentUses: 0,
       };
@@ -81,7 +105,8 @@ export const InviteCodeManager: React.FC<InviteCodeManagerProps> = ({ onRefresh 
       setShowCreateForm(false);
       toast.success('Invite code generated successfully!');
       onRefresh?.();
-    } catch {
+    } catch (error) {
+      console.error('Failed to generate invite code:', error);
       toast.error('Failed to generate invite code');
     } finally {
       setLoading(false);
@@ -99,15 +124,14 @@ export const InviteCodeManager: React.FC<InviteCodeManagerProps> = ({ onRefresh 
 
   const deactivateCode = async (codeId: string) => {
     try {
+      await invitationService.deleteInvitation(codeId);
       setInviteCodes(prev => 
-        prev.map(code => 
-          code.id === codeId ? { ...code, isActive: false } : code
-        )
+        prev.filter(code => code.id !== codeId)
       );
-      toast.success('Invite code deactivated');
+      toast.success('Invite code deleted');
       onRefresh?.();
     } catch {
-      toast.error('Failed to deactivate invite code');
+      toast.error('Failed to delete invite code');
     }
   };
 
@@ -163,6 +187,15 @@ export const InviteCodeManager: React.FC<InviteCodeManagerProps> = ({ onRefresh 
                 { value: InviteCodeType.MENTOR, label: 'Mentor', icon: <UserCheck className="w-4 h-4" />, description: 'For mentor registration' },
                 { value: InviteCodeType.ADMIN, label: 'Administrator', icon: <Shield className="w-4 h-4" />, description: 'For admin registration' },
               ]}
+            />
+            <Input
+              type="email"
+              name="email"
+              label="Email Address"
+              value={formData.email}
+              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+              placeholder="Enter email for this invitation"
+              required
             />
             <div className="grid grid-cols-2 gap-4">
               <Input

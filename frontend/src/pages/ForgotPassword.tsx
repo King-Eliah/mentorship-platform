@@ -5,6 +5,8 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 export const ForgotPassword: React.FC = () => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,24 +22,37 @@ export const ForgotPassword: React.FC = () => {
       // Validate email
       if (!email) {
         setError('Email address is required');
+        setLoading(false);
         return;
       }
 
       if (!isValidEmail(email)) {
         setError('Please enter a valid email address');
+        setLoading(false);
         return;
       }
 
-      // Simulate API call for password reset
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // For demo purposes, we'll always show success
-      // In real implementation, this would call your backend API
-      
+      // Call backend API
+      const response = await fetch(`${API_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || 'Failed to send reset email. Please try again.');
+        setLoading(false);
+        return;
+      }
+
       setSubmitted(true);
     } catch (err) {
       setError('Failed to send reset email. Please try again.');
+      console.error('Forgot password error:', err);
     } finally {
       setLoading(false);
     }
@@ -53,10 +68,21 @@ export const ForgotPassword: React.FC = () => {
     setError('');
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await fetch(`${API_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        setError(data.message || 'Failed to resend email. Please try again.');
+      }
     } catch (err) {
       setError('Failed to resend email. Please try again.');
+      console.error('Resend email error:', err);
     } finally {
       setLoading(false);
     }
@@ -65,7 +91,7 @@ export const ForgotPassword: React.FC = () => {
   if (submitted) {
     return (
       <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-900">
-        <div className="max-w-xl w-full">{/* Changed from max-w-md to max-w-xl for wider forms */}
+        <div className="max-w-xl w-full">
           <Card>
             <CardHeader>
               <div className="text-center">
@@ -98,7 +124,7 @@ export const ForgotPassword: React.FC = () => {
               <div className="text-center text-sm text-gray-600 dark:text-gray-400">
                 <p>
                   If you don't see the email in your inbox, check your spam folder.
-                  The link will expire in 24 hours.
+                  The link will expire in 1 hour.
                 </p>
               </div>
 
@@ -139,7 +165,7 @@ export const ForgotPassword: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-xl w-full">{/* Changed from max-w-md to max-w-xl for wider forms */}
+      <div className="max-w-xl w-full">
         <Card>
           <CardHeader>
             <div className="text-center">
@@ -182,7 +208,7 @@ export const ForgotPassword: React.FC = () => {
                 type="submit"
                 className="w-full"
                 loading={loading}
-                disabled={!email}
+                disabled={!email || loading}
               >
                 Send Reset Link
               </Button>
