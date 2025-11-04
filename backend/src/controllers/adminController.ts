@@ -376,3 +376,63 @@ export const getAnalytics = async (
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// Delete user (permanently remove from database)
+export const deleteUser = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Prevent deleting yourself
+    if (id === req.user?.id) {
+      res.status(400).json({ message: 'Cannot delete your own account' });
+      return;
+    }
+
+    // Delete the user (Prisma will cascade delete related records)
+    const user = await prisma.user.delete({
+      where: { id },
+    });
+
+    res.json({
+      message: 'User deleted successfully',
+      user,
+    });
+  } catch (error: any) {
+    console.error('Delete user error:', error);
+    if (error.code === 'P2025') {
+      res.status(404).json({ message: 'User not found' });
+    } else {
+      res.status(500).json({ message: 'Server error' });
+    }
+  }
+};
+
+// Delete invitation code
+export const deleteInvitationCode = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Delete the invitation code
+    const invitation = await prisma.invitationCode.delete({
+      where: { id },
+    });
+
+    res.json({
+      message: 'Invitation code deleted successfully',
+      invitation,
+    });
+  } catch (error: any) {
+    console.error('Delete invitation code error:', error);
+    if (error.code === 'P2025') {
+      res.status(404).json({ message: 'Invitation code not found' });
+    } else {
+      res.status(500).json({ message: 'Server error' });
+    }
+  }
+};

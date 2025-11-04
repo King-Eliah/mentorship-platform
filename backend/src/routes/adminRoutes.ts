@@ -8,6 +8,8 @@ import {
   updateUserStatus,
   createUserManually,
   getAnalytics,
+  deleteUser,
+  deleteInvitationCode,
 } from '../controllers/adminController';
 import { authenticate, authorize } from '../middleware/auth';
 
@@ -22,11 +24,13 @@ router.post('/generate-invitation-code', generateInvitationCode);
 router.get('/invitations', getInvitationRequests);
 router.put('/invitations/:id/approve', approveInvitation);
 router.put('/invitations/:id/reject', rejectInvitation);
+router.delete('/invitations/:id', deleteInvitationCode);
 
 // User management
 router.get('/users', getAllUsers);
 router.post('/users', createUserManually);
 router.put('/users/:id/status', updateUserStatus);
+router.delete('/users/:id', deleteUser);
 
 // Analytics
 router.get('/analytics', getAnalytics);
