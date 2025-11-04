@@ -112,14 +112,17 @@ export const getOrCreateConversation = async (
       return;
     }
 
-    // Check if users can message (have contact or admin)
-    const canMessage = await validateCanMessage(userId, otherUserId, req.user!.role);
+    // Admins can always message anyone - skip validation for admins
+    if (req.user!.role !== 'ADMIN') {
+      // Check if users can message (have contact or admin)
+      const canMessage = await validateCanMessage(userId, otherUserId, req.user!.role);
 
-    if (!canMessage) {
-      res.status(403).json({
-        message: 'You cannot message this user. Add them as a contact first.',
-      });
-      return;
+      if (!canMessage) {
+        res.status(403).json({
+          message: 'You cannot message this user. Add them as a contact first.',
+        });
+        return;
+      }
     }
 
     // Normalize IDs for unique constraint (smaller ID first)
@@ -218,7 +221,9 @@ export const getOrCreateConversation = async (
     });
   } catch (error) {
     console.error('Get or create conversation error:', error);
-    res.status(500).json({ message: 'Server error', error: error instanceof Error ? error.message : 'Unknown error' });
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error details:', errorMsg);
+    res.status(500).json({ message: 'Server error', error: errorMsg });
   }
 };
 
