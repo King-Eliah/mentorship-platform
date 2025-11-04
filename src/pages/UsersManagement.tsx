@@ -243,6 +243,7 @@ export default function UsersManagement() {
         setUsers(users.filter(u => u.id !== selectedUser.id));
         toast.success(`User ${selectedUser.firstName} ${selectedUser.lastName} has been deleted.`);
         setSelectedUser(null);
+        setShowDeleteConfirm(false);
       } catch (error) {
         console.error('Failed to delete user:', error);
         toast.error('Failed to delete user. Please try again.');
