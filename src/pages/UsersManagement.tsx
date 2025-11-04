@@ -237,11 +237,20 @@ export default function UsersManagement() {
     setShowDetailsModal(true);
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (selectedUser) {
-      setUsers(users.filter(u => u.id !== selectedUser.id));
-      toast.success(`User ${selectedUser.firstName} ${selectedUser.lastName} has been deleted.`);
-      setSelectedUser(null);
+      try {
+        // Remove user from the list
+        setUsers(users.filter(u => u.id !== selectedUser.id));
+        // Show success toast
+        toast.success(`User ${selectedUser.firstName} ${selectedUser.lastName} has been deleted successfully.`);
+        // Close modal and deselect
+        setSelectedUser(null);
+        setShowDeleteConfirm(false);
+      } catch (error) {
+        console.error('Failed to delete user:', error);
+        toast.error('Failed to delete user. Please try again.');
+      }
     }
   };
 
@@ -869,10 +878,10 @@ export default function UsersManagement() {
           setSelectedUser(null);
         }}
         onConfirm={handleDeleteConfirm}
-        title="Delete User"
+        title="⚠️ Permanently Delete User"
         message={selectedUser ? 
-          `Are you sure you want to delete ${selectedUser.firstName} ${selectedUser.lastName}? This action cannot be undone.` :
-          'Are you sure you want to delete this user? This action cannot be undone.'
+          `Are you sure you want to PERMANENTLY DELETE ${selectedUser.firstName} ${selectedUser.lastName}? This user will be completely removed from the system and cannot be recovered.` :
+          'Are you sure you want to permanently delete this user? This action cannot be undone.'
         }
         confirmText="Delete User"
         variant="danger"
