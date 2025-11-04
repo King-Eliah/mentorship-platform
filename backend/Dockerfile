@@ -4,16 +4,15 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
+COPY tsconfig.json ./
 COPY prisma ./prisma
+COPY src ./src
 
 # Install dependencies
 RUN npm ci
 
 # Build the app (TypeScript compilation + Prisma generation)
 RUN npm run build
-
-# Copy source
-COPY src ./src
 
 # Run migrations and start
 CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
