@@ -1,0 +1,628 @@
+// This is your Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model with role-based access
+model User {
+  id            String       @id @default(uuid())
+  email         String       @unique
+  password      String
+  firstName     String
+  lastName      String
+  role          Role         @default(MENTEE)
+  status        UserStatus   @default(ACTIVE)
+  isActive      Boolean      @default(true)
+  emailVerified Boolean      @default(false)
+  avatar        String?
+  bio           String?
+  
+  // Password reset
+  resetToken    String?
+  resetTokenExpiresAt DateTime?
+  
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // Profile information
+  profile       Profile?
+  
+  // Relationships
+  mentorProfile       MentorProfile?
+  goals               Goal[]
+  activities          Activity[]
+  notifications       Notification[]
+  eventsCreated       Event[]        @relation("EventCreator")
+  eventAttendees      EventAttendee[]
+  groupMemberships    GroupMember[]
+  mentorGroups        MentorGroup[]  @relation("MentorGroups")
+  sentMessages        Message[]      @relation("MessageSender")
+  receivedMessages    Message[]      @relation("MessageReceiver")
+  resources           Resource[]
+  sharedByMe          SharedResource[] @relation("SharedByUser")
+  sharedWithMe        SharedResource[] @relation("SharedWithUser")
+  feedbacks           Feedback[]
+  incidentReports     IncidentReport[]
+  sessionLogs         SessionLog[]
+  
+  // Messaging system
+  blockedUsers        String[]       @default([])
+  lastSeenOnline      DateTime       @default(now())
+  isOnline            Boolean        @default(false)
+  
+  conversationsUser1  Conversation[] @relation("ConversationUser1")
+  conversationsUser2  Conversation[] @relation("ConversationUser2")
+  directMessages      DirectMessage[]
+  userContacts        Contact[]      @relation("UserContacts")
+  contactOf           Contact[]      @relation("ContactOf")
+  
+  // Contact requests
+  contactRequestsSent     ContactRequest[] @relation("ContactRequestsSent")
+  contactRequestsReceived ContactRequest[] @relation("ContactRequestsReceived")
+
+  @@index([email])
+  @@index([role])
+  @@index([status])
+}
+
+enum Role {
+  ADMIN
+  MENTOR
+  MENTEE
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+  REJECTED
+}
+
+// Extended profile information
+model Profile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone           String?
+  dateOfBirth     DateTime?
+  location        String?
+  organization    String?
+  position        String?
+  linkedIn        String?
+  twitter         String?
+  website         String?
+  interests       String[]
+  skills          String[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Mentor-specific information
+model MentorProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expertise       String[]
+  yearsExperience Int?
+  availability    String?
+  maxMentees      Int      @default(5)
+  currentMentees  Int      @default(0)
+  isAvailable     Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Goals and objectives
+model Goal {
+  id               String      @id @default(uuid())
+  userId           String
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title            String
+  description      String
+  category         String?
+  status           GoalStatus  @default(IN_PROGRESS)
+  priority         Priority    @default(MEDIUM)
+  dueDate          DateTime?
+  completedAt      DateTime?
+  needsHelp        Boolean     @default(false)
+  helpRequestedAt  DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([needsHelp])
+}
+
+enum GoalStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+  PAUSED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// Activities and learning resources
+model Activity {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  type        ActivityType
+  status      ActivityStatus @default(NOT_STARTED)
+  url         String?
+  dueDate     DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+}
+
+enum ActivityType {
+  COURSE
+  ARTICLE
+  VIDEO
+  WORKSHOP
+  OTHER
+}
+
+enum ActivityStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+// Events system
+model Event {
+  id          String   @id @default(uuid())
+  creatorId   String
+  creator     User     @relation("EventCreator", fields: [creatorId], references: [id])
+  title       String
+  description String
+  type        EventType
+  location    String?
+  isVirtual   Boolean  @default(false)
+  meetingLink String?
+  startTime   DateTime
+  endTime     DateTime
+  maxAttendees Int?
+  isPublic    Boolean  @default(true)
+  status      EventStatus @default(UPCOMING)
+  attachments  String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  attendees   EventAttendee[]
+
+  @@index([creatorId])
+  @@index([type])
+  @@index([status])
+  @@index([startTime])
+}
+
+enum EventType {
+  WORKSHOP
+  WEBINAR
+  NETWORKING
+  MENTORING_SESSION
+  SOCIAL
+  OTHER
+}
+
+enum EventStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+model EventAttendee {
+  id        String   @id @default(uuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    AttendeeStatus @default(REGISTERED)
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId])
+  @@index([userId])
+  @@index([eventId])
+}
+
+enum AttendeeStatus {
+  REGISTERED
+  ATTENDED
+  CANCELLED
+  NO_SHOW
+}
+
+// Mentor Groups (for mentorship program)
+model MentorGroup {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  mentorId    String
+  mentor      User     @relation("MentorGroups", fields: [mentorId], references: [id], onDelete: Cascade)
+  menteeIds   String[] @default([])
+  maxMembers  Int?     @default(5)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([mentorId])
+  @@index([isActive])
+}
+
+// Groups and communities
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  category    String?
+  isPrivate   Boolean  @default(false)
+  maxMembers  Int?
+  avatar      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     GroupMember[]
+  messages    Message[]
+
+  @@index([category])
+}
+
+model GroupMember {
+  id        String      @id @default(uuid())
+  groupId   String
+  group     Group       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      GroupRole   @default(MEMBER)
+  joinedAt  DateTime    @default(now())
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@index([groupId])
+}
+
+enum GroupRole {
+  ADMIN
+  MODERATOR
+  MEMBER
+}
+
+// Messaging system
+model Message {
+  id          String   @id @default(uuid())
+  senderId    String
+  sender      User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId  String?
+  receiver    User?    @relation("MessageReceiver", fields: [receiverId], references: [id])
+  groupId     String?
+  group       Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  content     String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([groupId])
+  @@index([createdAt])
+}
+
+// Notifications
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  EVENT
+  MESSAGE
+  GOAL
+  ACTIVITY
+  GROUP
+  SYSTEM
+  FEEDBACK
+}
+
+// Resources sharing
+model Resource {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  type        ResourceType
+  url         String?
+  filePath    String?
+  category    String?
+  isPublic    Boolean  @default(true)
+  downloads   Int      @default(0)
+  sharedResources SharedResource[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([type])
+  @@index([category])
+}
+
+enum ResourceType {
+  DOCUMENT
+  VIDEO
+  LINK
+  PRESENTATION
+  OTHER
+}
+
+// Shared resources tracking (mentor shares with mentees)
+model SharedResource {
+  id          String   @id @default(uuid())
+  resourceId  String
+  resource    Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  sharedById  String
+  sharedBy    User     @relation("SharedByUser", fields: [sharedById], references: [id], onDelete: Cascade)
+  sharedWithId String
+  sharedWith  User     @relation("SharedWithUser", fields: [sharedWithId], references: [id], onDelete: Cascade)
+  viewedAt    DateTime?
+  createdAt   DateTime @default(now())
+
+  @@unique([resourceId, sharedWithId])
+  @@index([resourceId])
+  @@index([sharedById])
+  @@index([sharedWithId])
+}
+
+// Feedback system
+model Feedback {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     String
+  subject      String
+  message      String
+  status       FeedbackStatus @default(PENDING)
+  response     String?
+  respondedBy  String?
+  respondedAt  DateTime?
+  isAnonymous  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+enum FeedbackStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+}
+
+// Incident reports
+model IncidentReport {
+  id              String   @id @default(uuid())
+  reporterId      String
+  reporter        User     @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  category        String
+  severity        Severity
+  description     String
+  location        String?
+  involvedParties String[] @default([])
+  witnessNames    String?
+  attachments     Json?
+  isAnonymous     Boolean  @default(false)
+  status          IncidentStatus @default(OPEN)
+  resolution      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([reporterId])
+  @@index([status])
+  @@index([severity])
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+// Session logs for tracking user activity
+model SessionLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// Recent activities tracking for activity feed
+model RecentActivity {
+  id                 String   @id @default(uuid())
+  userId             String
+  type               String
+  title              String
+  description        String
+  relatedEntityId    String?
+  relatedEntityType  String?
+  metadata           Json?
+  isPublic           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([isPublic])
+}
+
+// Invitation codes for mentor and admin registration (requires admin approval)
+model InvitationCode {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  email       String
+  role        Role
+  status      InvitationStatus @default(PENDING)
+  createdBy   String?
+  approvedBy  String?
+  usedBy      String?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([code])
+  @@index([email])
+  @@index([status])
+}
+
+enum InvitationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  USED
+  EXPIRED
+}
+
+// Messaging System - Conversations between two users
+model Conversation {
+  id              String        @id @default(uuid())
+  userId1         String
+  user1           User          @relation("ConversationUser1", fields: [userId1], references: [id], onDelete: Cascade)
+  userId2         String
+  user2           User          @relation("ConversationUser2", fields: [userId2], references: [id], onDelete: Cascade)
+  
+  directMessages  DirectMessage[]
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([userId1, userId2])
+  @@index([userId1])
+  @@index([userId2])
+}
+
+// Direct messages between two users
+model DirectMessage {
+  id              String        @id @default(uuid())
+  conversationId  String
+  conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  senderId        String
+  sender          User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  
+  content         String
+  type            MessageType   @default(TEXT)
+  fileUrl         String?
+  
+  isRead          Boolean       @default(false)
+  readAt          DateTime?
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+}
+
+// Contact list for each user
+model Contact {
+  id              String        @id @default(uuid())
+  userId          String
+  user            User          @relation("UserContacts", fields: [userId], references: [id], onDelete: Cascade)
+  
+  contactUserId   String
+  contactUser     User          @relation("ContactOf", fields: [contactUserId], references: [id], onDelete: Cascade)
+  
+  contactType     ContactType
+  addedAt         DateTime      @default(now())
+  notes           String?
+
+  @@unique([userId, contactUserId])
+  @@index([userId])
+  @@index([contactType])
+}
+
+// Contact requests for pending custom contact additions
+model ContactRequest {
+  id              String        @id @default(uuid())
+  senderId        String
+  sender          User          @relation("ContactRequestsSent", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  receiverId      String
+  receiver        User          @relation("ContactRequestsReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  status          ContactRequestStatus @default(PENDING)
+  message         String?
+  createdAt       DateTime      @default(now())
+  respondedAt     DateTime?
+
+  @@unique([senderId, receiverId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
+}
+
+enum ContactRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum ContactType {
+  MENTOR
+  MENTEE
+  GROUP_MEMBER
+  ADMIN
+  CUSTOM
+}
