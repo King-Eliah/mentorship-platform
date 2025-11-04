@@ -7,7 +7,13 @@ import prisma from '../config/database';
  */
 export const getConversations = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user!.id;
+    const userId = req.user?.id;
+    
+    if (!userId) {
+      console.error('Get conversations error: No user ID in request');
+      res.status(401).json({ message: 'Unauthorized - no user ID' });
+      return;
+    }
 
     const conversations = await prisma.conversation.findMany({
       where: {
@@ -74,7 +80,7 @@ export const getConversations = async (req: AuthRequest, res: Response): Promise
     res.json({ conversations: transformedConversations });
   } catch (error) {
     console.error('Get conversations error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: error instanceof Error ? error.message : 'Unknown error' });
   }
 };
 
@@ -86,7 +92,14 @@ export const getOrCreateConversation = async (
   res: Response
 ): Promise<void> => {
   try {
-    const userId = req.user!.id;
+    const userId = req.user?.id;
+    
+    if (!userId) {
+      console.error('Get or create conversation error: No user ID');
+      res.status(401).json({ message: 'Unauthorized - no user ID' });
+      return;
+    }
+
     const { otherUserId } = req.body;
 
     if (!otherUserId) {
@@ -205,7 +218,7 @@ export const getOrCreateConversation = async (
     });
   } catch (error) {
     console.error('Get or create conversation error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: error instanceof Error ? error.message : 'Unknown error' });
   }
 };
 

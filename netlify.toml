@@ -17,7 +17,7 @@
   to = "/index.html"
   status = 200
 
-# Headers for security
+# Headers for security and cache control
 [[headers]]
   for = "/*"
   [headers.values]
@@ -25,8 +25,12 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+    # Force no caching for HTML to always get fresh content
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Pragma = "no-cache"
+    Expires = "0"
 
-# Cache static assets
+# Cache static assets (JS, CSS, images with hashed filenames)
 [[headers]]
   for = "/assets/*"
   [headers.values]
