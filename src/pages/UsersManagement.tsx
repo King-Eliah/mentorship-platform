@@ -878,10 +878,10 @@ export default function UsersManagement() {
           setSelectedUser(null);
         }}
         onConfirm={handleDeleteConfirm}
-        title="Delete User"
+        title="⚠️ Permanently Delete User"
         message={selectedUser ? 
-          `Are you sure you want to delete ${selectedUser.firstName} ${selectedUser.lastName}? This action cannot be undone.` :
-          'Are you sure you want to delete this user? This action cannot be undone.'
+          `Are you sure you want to PERMANENTLY DELETE ${selectedUser.firstName} ${selectedUser.lastName}? This user will be completely removed from the system and cannot be recovered.` :
+          'Are you sure you want to permanently delete this user? This action cannot be undone.'
         }
         confirmText="Delete User"
         variant="danger"
